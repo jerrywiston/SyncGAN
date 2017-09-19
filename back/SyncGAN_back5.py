@@ -106,13 +106,10 @@ def xavier_init(size):
 #Placeholder
 z1_ = tf.placeholder(tf.float32, shape=[None, z_dim])
 z2_ = tf.placeholder(tf.float32, shape=[None, z_dim])
-
-c1_ = tf.placeholder(tf.float32, shape=[None, c_dim])
-c2_ = tf.placeholder(tf.float32, shape=[None, c_dim])
+c_ = tf.placeholder(tf.float32, shape=[None, c_dim])
 
 x1_ = tf.placeholder(tf.float32, shape=[None, 784])
 x2_ = tf.placeholder(tf.float32, shape=[None, 784])
-
 s_ = tf.placeholder(tf.float32, shape=[None, 1])
 
 #Generator
@@ -191,8 +188,8 @@ def Synchronizer(x1, x2):
 	y_s_prob = tf.nn.sigmoid(y_s_digit)
 	return y_s_digit, y_s_prob
 
-G1_sample = Generator(z1_, c1_, 0)
-G2_sample = Generator(z2_, c2_, 1)
+G1_sample = Generator(z1_, c_, 0)
+G2_sample = Generator(z2_, c_, 1)
 
 D1_real_digit, D1_real_prob = Discriminator(x1_, 0)
 D2_real_digit, D2_real_prob = Discriminator(x2_, 1)
@@ -202,7 +199,8 @@ D2_fake_digit, D2_fake_prob = Discriminator(G2_sample, 1)
 S_real_digit, S_real_prob = Synchronizer(x1_, x2_)
 S_fake_digit, S_fake_prob = Synchronizer(G1_sample, G2_sample)
 
-#Train Generator & Discriminator
+#Loss & Train
+
 #Vanilla GAN Loss
 D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real_digit, labels=tf.ones_like(D1_real_digit)))
 D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_digit, labels=tf.zeros_like(D1_fake_digit)))
@@ -223,9 +221,11 @@ G1_loss = -tf.reduce_mean(tf.log(D1_fake_prob + eps))
 G2_loss = -tf.reduce_mean(tf.log(D2_fake_prob + eps))
 '''
 
-#Train Synchronizer
+#Train S
+#S_real_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=s_, logits=S_real_digit))
+#S_fake_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf.ones_like(S_fake_digit), logits=S_fake_digit))
 S_real_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_real_prob - s_), reduction_indices=[1]))
-S_fake_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_fake_prob - s_), reduction_indices=[1]))
+S_fake_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_fake_prob - tf.ones_like(S_fake_prob)), reduction_indices=[1]))
 
 #Solver 
 G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_gs + var_g1)
@@ -235,7 +235,7 @@ D1_solver = tf.train.AdamOptimizer().minimize(D1_loss, var_list=var_d1)
 D2_solver = tf.train.AdamOptimizer().minimize(D2_loss, var_list=var_d2)
 
 S_real_solver = tf.train.AdamOptimizer().minimize(S_real_loss, var_list=var_s)
-S_fake_solver = tf.train.AdamOptimizer().minimize(S_fake_loss, var_list=var_gs + var_g1 + var_g2)
+S_fake_solver = tf.train.AdamOptimizer(2e-4).minimize(S_fake_loss, var_list=var_gs + var_g1 + var_g2)
 
 #Read Dataset
 mnist_digit = input_data.read_data_sets('MNIST_digit', one_hot=False)
@@ -257,36 +257,26 @@ if not os.path.exists('out/'):
 
 i=0
 for it in range(500001):
-	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_next_batch(x1_train, x2_train, batch_size)
-	
+
 	x1_batch = np.concatenate((x1_sync, x1_nsync), axis=0)
 	x2_batch = np.concatenate((x2_sync, x2_nsync), axis=0)
-	sr_batch = np.concatenate((s_sync, s_nsync), axis=0)
+	s_batch = np.concatenate((s_sync, s_nsync), axis=0)
 
 	z1_batch = sample_z(batch_size*2, z_dim)
 	z2_batch = sample_z(batch_size*2, z_dim)
+	c_batch = sample_z(batch_size*2, c_dim)
 
-	c_sync_batch = sample_z(batch_size, c_dim)
-	c1_nsync_batch = sample_z(batch_size, c_dim)
-	c2_nsync_batch = sample_z(batch_size, c_dim)
+	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c_:c_batch, x1_:x1_batch})
+	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c_:c_batch, x2_:x2_batch})
 
-	c1_batch = np.concatenate((c_sync_batch, c1_nsync_batch), axis=0)
-	c2_batch = np.concatenate((c_sync_batch, c2_nsync_batch), axis=0)
-	sf_batch = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
+	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c_:c_batch})
+	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c_:c_batch})
 
-	#Training
-	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
-	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch, x2_:x2_batch})
-
-	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
-	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch})
-
-	_, loss_sr = sess.run([S_real_solver, S_real_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
-	_, loss_sf = sess.run([S_fake_solver, S_fake_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
+	_, loss_sr = sess.run([S_real_solver, S_real_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:s_batch})
+	_, loss_sf = sess.run([S_fake_solver, S_fake_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c_:c_batch})
 	
-	#Show result
 	if it%1000 == 0:
 		print("Iter: {}\n D1_loss: {:.4}, D2_loss: {:.4}\n G1_loss: {:.4}, G2_loss: {:.4}\n Sr_loss: {:.4}, Sf_loss: {:.4}\n"
 				.format(it, loss_d1, loss_d2, loss_g1, loss_g2, loss_sr, loss_sf))
@@ -295,8 +285,8 @@ for it in range(500001):
 		z2_batch = sample_z(8, z_dim)
 		c_batch = sample_z(8, c_dim)
 		
-		x1_samp = sess.run(G1_sample, feed_dict={z1_: z1_batch, c1_: c_batch})
-		x2_samp = sess.run(G2_sample, feed_dict={z2_: z2_batch, c2_: c_batch})
+		x1_samp = sess.run(G1_sample, feed_dict={z1_: z1_batch, c_: c_batch})
+		x2_samp = sess.run(G2_sample, feed_dict={z2_: z2_batch, c_: c_batch})
 		x_samp = np.concatenate((x1_samp, x2_samp), axis=0)
 		
 		plot_x(i,'samp', x_samp)
