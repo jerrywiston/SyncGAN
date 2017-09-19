@@ -156,7 +156,7 @@ def Discriminator(x, m):
 	h_d1 = tf.nn.relu(tf.matmul(x, W_m_d1[m]) + b_m_d1[m])
 	y_r_digit = tf.matmul(h_d1, W_m_d2[m]) + b_m_d2[m]
 	y_r_prob = tf.nn.sigmoid(y_r_digit)
-	return y_r_digit
+	return y_r_digit, y_r_prob
 
 #Synchronizer
 W_m1_s1 = tf.Variable(xavier_init([784,128]))
@@ -184,25 +184,36 @@ def Synchronizer(x1, x2):
 G1_sample = Generator(z1_, c_, 0)
 G2_sample = Generator(z2_, c_, 1)
 
-D1_real = Discriminator(x1_, 0)
-D2_real = Discriminator(x2_, 1)
-D1_fake = Discriminator(G1_sample, 0)
-D2_fake = Discriminator(G2_sample, 1)
+D1_real_digit, D1_real_prob = Discriminator(x1_, 0)
+D2_real_digit, D2_real_prob = Discriminator(x2_, 1)
+D1_fake_digit, D1_fake_prob = Discriminator(G1_sample, 0)
+D2_fake_digit, D2_fake_prob = Discriminator(G2_sample, 1)
 
 S_real = Synchronizer(x1_, x2_)
 S_fake = Synchronizer(G1_sample, G2_sample)
 
 #Loss & Train
-#Train D
-D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real, labels=tf.ones_like(D1_real)))
-D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake, labels=tf.zeros_like(D1_fake)))
-D2_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_real, labels=tf.ones_like(D2_real)))
-D2_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake, labels=tf.zeros_like(D2_fake)))
+'''
+#Vallina GAN Loss
+D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real_digit, labels=tf.ones_like(D1_real_digit)))
+D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_digit, labels=tf.zeros_like(D1_fake_digit)))
+D2_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_real_digit, labels=tf.ones_like(D2_real_digit)))
+D2_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake_digit, labels=tf.zeros_like(D2_fake_digit)))
 D_loss = D1_loss_real + D1_loss_fake + D2_loss_real + D2_loss_fake
 
-#Train G
-G1_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake, labels=tf.ones_like(D1_fake)))
-G2_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake, labels=tf.ones_like(D2_fake)))
+G1_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_digit, labels=tf.ones_like(D1_fake_digit)))
+G2_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake_digit, labels=tf.ones_like(D2_fake_digit)))
+G_loss = G1_loss + G2_loss
+'''
+
+#W-GAN Loss
+eps = 1e-8
+D1_loss = -tf.reduce_mean(tf.log(D1_real_prob + eps) + tf.log(1. - D1_fake_prob + eps))
+D2_loss = -tf.reduce_mean(tf.log(D2_real_prob + eps) + tf.log(1. - D2_fake_prob + eps))
+D_loss = D1_loss + D2_loss
+
+G1_loss = -tf.reduce_mean(tf.log(D1_fake_prob + eps))
+G2_loss = -tf.reduce_mean(tf.log(D2_fake_prob + eps))
 G_loss = G1_loss + G2_loss
 
 #Train S
@@ -242,9 +253,9 @@ for it in range(500001):
 	x2_batch = np.concatenate((x2_sync, x2_nsync), axis=0)
 	s_batch = np.concatenate((s_sync, s_nsync), axis=0)
 
-	z1_batch = sample_z(batch_size, z_dim)
-	z2_batch = sample_z(batch_size, z_dim)
-	c_batch = sample_z(batch_size, c_dim)
+	z1_batch = sample_z(batch_size*2, z_dim)
+	z2_batch = sample_z(batch_size*2, z_dim)
+	c_batch = sample_z(batch_size*2, c_dim)
 
 	_, loss_d = sess.run([D_solver, D_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch, x1_:x1_batch, x2_:x2_batch})
 	_, loss_g = sess.run([G_solver, G_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch})
