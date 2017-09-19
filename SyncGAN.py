@@ -197,7 +197,7 @@ S_real_digit, S_real_prob = Synchronizer(x1_, x2_)
 S_fake_digit, S_fake_prob = Synchronizer(G1_sample, G2_sample)
 
 #Loss & Train
-
+'''
 #Vanilla GAN Loss
 D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real_digit, labels=tf.ones_like(D1_real_digit)))
 D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_digit, labels=tf.zeros_like(D1_fake_digit)))
@@ -220,7 +220,7 @@ D_loss = D1_loss + D2_loss
 G1_loss = -tf.reduce_mean(tf.log(D1_fake_prob + eps))
 G2_loss = -tf.reduce_mean(tf.log(D2_fake_prob + eps))
 G_loss = G1_loss + G2_loss
-'''
+
 
 #Train S
 #S_real_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=s_, logits=S_real_digit))
@@ -232,6 +232,8 @@ S_fake_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_fake_prob - tf.ones_like(
 G_solver = tf.train.AdamOptimizer().minimize(G_loss, var_list=var_gs + var_g1 + var_g2)
 D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=var_d1 + var_d2)
 
+G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_gs + var_g1)
+G2_solver = tf.train.AdamOptimizer().minimize(G2_loss, var_list=var_gs + var_g2)
 D1_solver = tf.train.AdamOptimizer().minimize(D1_loss, var_list=var_d1)
 D2_solver = tf.train.AdamOptimizer().minimize(D2_loss, var_list=var_d2)
 
@@ -273,13 +275,16 @@ for it in range(500001):
 	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c_:c_batch, x1_:x1_batch})
 	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c_:c_batch, x2_:x2_batch})
 
-	_, loss_g = sess.run([G_solver, G_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch})
+	#_, loss_g = sess.run([G_solver, G_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch})
+	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c_:c_batch})
+	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c_:c_batch})
+
 	_, loss_sr = sess.run([S_real_solver, S_real_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:s_batch})
 	_, loss_sf = sess.run([S_fake_solver, S_fake_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c_:c_batch})
 	
 	if it%1000 == 0:
-		print("Iter: {}, D1_loss: {:.4},  D2_loss: {:.4}, G_loss: {:.4} , Sr_loss: {:.4}, Sf_loss: {:.4}"
-				.format(it, loss_d1, loss_d2, loss_g, loss_sr, loss_sf))
+		print("Iter: {}\n D1_loss: {:.4}, G1_loss: {:.4}\n D2_loss: {:.4}, G2_loss: {:.4}\n Sr_loss: {:.4}, Sf_loss: {:.4}\n"
+				.format(it, loss_d1, loss_g1, loss_d2, loss_g2, loss_sr, loss_sf))
 		
 		z1_batch = sample_z(8, z_dim)
 		z2_batch = sample_z(8, z_dim)
