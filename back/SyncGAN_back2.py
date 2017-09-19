@@ -194,15 +194,14 @@ S_fake = Synchronizer(G1_sample, G2_sample)
 
 #Loss & Train
 #Train D
-D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real, labels=tf.ones_like(D1_real)))
-D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake, labels=tf.zeros_like(D1_fake)))
-D2_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_real, labels=tf.ones_like(D2_real)))
-D2_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake, labels=tf.zeros_like(D2_fake)))
-D_loss = D1_loss_real + D1_loss_fake + D2_loss_real + D2_loss_fake
+eps = 1e-8
+D1_loss = 0.5 * (tf.reduce_mean((D1_real - 1)**2) + tf.reduce_mean(D1_fake**2))
+D2_loss = 0.5 * (tf.reduce_mean((D2_real - 1)**2) + tf.reduce_mean(D2_fake**2))
+D_loss = D1_loss + D2_loss
 
 #Train G
-G1_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake, labels=tf.ones_like(D1_fake)))
-G2_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake, labels=tf.ones_like(D2_fake)))
+G1_loss = 0.5 * tf.reduce_mean((D1_fake - 1)**2)
+G2_loss = 0.5 * tf.reduce_mean((D2_fake - 1)**2)
 G_loss = G1_loss + G2_loss
 
 #Train S
@@ -246,6 +245,8 @@ for it in range(500001):
 	z2_batch = sample_z(batch_size, z_dim)
 	c_batch = sample_z(batch_size, c_dim)
 
+	_, loss_d = sess.run([D_solver, D_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch, x1_:x1_batch, x2_:x2_batch})
+	_, loss_d = sess.run([D_solver, D_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch, x1_:x1_batch, x2_:x2_batch})
 	_, loss_d = sess.run([D_solver, D_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch, x1_:x1_batch, x2_:x2_batch})
 	_, loss_g = sess.run([G_solver, G_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch})
 	_, loss_sr = sess.run([S_real_solver, S_real_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:s_batch})

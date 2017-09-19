@@ -1,0 +1,2 @@
+back1: remove one layer from generator
+back2: use vallina GAN loss
