@@ -194,7 +194,7 @@ S_fake = Synchronizer(G1_sample, G2_sample)
 
 #Loss & Train
 '''
-#Vallina GAN Loss
+#Vanilla GAN Loss
 D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real_digit, labels=tf.ones_like(D1_real_digit)))
 D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_digit, labels=tf.zeros_like(D1_fake_digit)))
 D2_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_real_digit, labels=tf.ones_like(D2_real_digit)))
