@@ -89,9 +89,6 @@ def nsync_next_batch(img1_list, img2_list, size):
 def sample_z(m, n):
     return np.random.uniform(-1., 1., size=[m, n])
 
-def sample_normal_z(m, n):
-	return np.random.normal(0., 1., size=[m, n])
-
 #Parameter
 batch_size = 32
 z_dim = 32
@@ -200,7 +197,7 @@ S_real_digit, S_real_prob = Synchronizer(x1_, x2_)
 S_fake_digit, S_fake_prob = Synchronizer(G1_sample, G2_sample)
 
 #Loss & Train
-
+'''
 #Vanilla GAN Loss
 D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real_digit, labels=tf.ones_like(D1_real_digit)))
 D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_digit, labels=tf.zeros_like(D1_fake_digit)))
@@ -208,18 +205,22 @@ D2_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_
 D2_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake_digit, labels=tf.zeros_like(D2_fake_digit)))
 D1_loss = D1_loss_real + D1_loss_fake 
 D2_loss = D2_loss_real + D2_loss_fake
+D_loss = D1_loss + D2_loss
 
 G1_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_digit, labels=tf.ones_like(D1_fake_digit)))
 G2_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake_digit, labels=tf.ones_like(D2_fake_digit)))
+G_loss = G1_loss + G2_loss
 '''
 #W-GAN Loss
 eps = 1e-8
 D1_loss = -tf.reduce_mean(tf.log(D1_real_prob + eps) + tf.log(1. - D1_fake_prob + eps))
 D2_loss = -tf.reduce_mean(tf.log(D2_real_prob + eps) + tf.log(1. - D2_fake_prob + eps))
+D_loss = D1_loss + D2_loss
 
 G1_loss = -tf.reduce_mean(tf.log(D1_fake_prob + eps))
 G2_loss = -tf.reduce_mean(tf.log(D2_fake_prob + eps))
-'''
+G_loss = G1_loss + G2_loss
+
 
 #Train S
 #S_real_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=s_, logits=S_real_digit))
@@ -228,14 +229,16 @@ S_real_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_real_prob - s_), reductio
 S_fake_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_fake_prob - tf.ones_like(S_fake_prob)), reduction_indices=[1]))
 
 #Solver 
+G_solver = tf.train.AdamOptimizer().minimize(G_loss, var_list=var_gs + var_g1 + var_g2)
+D_solver = tf.train.AdamOptimizer().minimize(D_loss, var_list=var_d1 + var_d2)
+
 G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_gs + var_g1)
 G2_solver = tf.train.AdamOptimizer().minimize(G2_loss, var_list=var_gs + var_g2)
-
 D1_solver = tf.train.AdamOptimizer().minimize(D1_loss, var_list=var_d1)
 D2_solver = tf.train.AdamOptimizer().minimize(D2_loss, var_list=var_d2)
 
 S_real_solver = tf.train.AdamOptimizer().minimize(S_real_loss, var_list=var_s)
-S_fake_solver = tf.train.AdamOptimizer(2e-4).minimize(S_fake_loss, var_list=var_gs + var_g1 + var_g2)
+S_fake_solver = tf.train.AdamOptimizer().minimize(S_fake_loss, var_list=var_gs + var_g1 + var_g2)
 
 #Read Dataset
 mnist_digit = input_data.read_data_sets('MNIST_digit', one_hot=False)
@@ -268,9 +271,11 @@ for it in range(500001):
 	z2_batch = sample_z(batch_size*2, z_dim)
 	c_batch = sample_z(batch_size*2, c_dim)
 
+	#_, loss_d = sess.run([D_solver, D_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch, x1_:x1_batch, x2_:x2_batch})
 	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c_:c_batch, x1_:x1_batch})
 	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c_:c_batch, x2_:x2_batch})
 
+	#_, loss_g = sess.run([G_solver, G_loss], feed_dict={z1_:z1_batch , z2_:z2_batch, c_:c_batch})
 	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c_:c_batch})
 	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c_:c_batch})
 
@@ -278,8 +283,8 @@ for it in range(500001):
 	_, loss_sf = sess.run([S_fake_solver, S_fake_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c_:c_batch})
 	
 	if it%1000 == 0:
-		print("Iter: {}\n D1_loss: {:.4}, D2_loss: {:.4}\n G1_loss: {:.4}, G2_loss: {:.4}\n Sr_loss: {:.4}, Sf_loss: {:.4}\n"
-				.format(it, loss_d1, loss_d2, loss_g1, loss_g2, loss_sr, loss_sf))
+		print("Iter: {}\n D1_loss: {:.4}, G1_loss: {:.4}\n D2_loss: {:.4}, G2_loss: {:.4}\n Sr_loss: {:.4}, Sf_loss: {:.4}\n"
+				.format(it, loss_d1, loss_g1, loss_d2, loss_g2, loss_sr, loss_sf))
 		
 		z1_batch = sample_z(8, z_dim)
 		z2_batch = sample_z(8, z_dim)

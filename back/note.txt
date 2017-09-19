@@ -1,2 +1,4 @@
 back1: remove one layer from generator
 back2: use vanilla GAN loss
+back3: share synchronizer and discriminator weight
+back4: +info XXX
