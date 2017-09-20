@@ -88,13 +88,13 @@ def Generator(z):
     return h_g_re3
 
 #Discriminator
-W_d_conv1 = tf.Variable(xavier_init([5,5,1,8]))
-b_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
+W_d_conv1 = tf.Variable(xavier_init([5,5,1,4]))
+b_d_conv1 = tf.Variable(tf.zeros(shape=[4]))
 
-W_d_conv2 = tf.Variable(xavier_init([5,5,8,16]))
-b_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
+W_d_conv2 = tf.Variable(xavier_init([5,5,4,8]))
+b_d_conv2 = tf.Variable(tf.zeros(shape=[8]))
 
-W_d_fc3 = tf.Variable(xavier_init([7*7*16, 64]))
+W_d_fc3 = tf.Variable(xavier_init([7*7*8, 64]))
 b_d_fc3 = tf.Variable(tf.zeros(shape=[64]))
 
 W_d_fc4 = tf.Variable(xavier_init([64, 1]))
@@ -107,14 +107,14 @@ def Discriminator(x):
 	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_d_conv1, [1,2,2,1]) + b_d_conv1)
 
 	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_d_conv2, [1,2,2,1]) + b_d_conv2)
-	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*8])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_d_fc3) + b_d_fc3)
 	
-	y_digit = tf.matmul(h_d_fc3, W_d_fc4) + b_d_fc4
-	y_prob = tf.nn.sigmoid(y_digit)
+	y_logit = tf.matmul(h_d_fc3, W_d_fc4) + b_d_fc4
+	y_prob = tf.nn.sigmoid(y_logit)
 	
-	return y_prob, y_digit 
+	return y_prob, y_logit 
 
 G_sample = Generator(z_)
 D_real, D_logit_real = Discriminator(x_)

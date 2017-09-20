@@ -7,7 +7,6 @@ import os
 import random
 import math
 
-#==================== Draw Figure ====================
 def plot(samples):
     fig = plt.figure(figsize=(4, 4))
     gs = gridspec.GridSpec(4, 4)
@@ -28,7 +27,6 @@ def plot_x(id, type, samp):
     plt.savefig('out/{}_{}.png'.format(str(id).zfill(4), type), bbox_inches='tight')
     plt.close(fig)
 
-#==================== Data Batch ====================
 def class_list(imgs, labels, c=10):
 	imgs_list = imgs.tolist()
 	imgs_class_list = []
@@ -131,17 +129,18 @@ def sample_z(m, n):
 def sample_normal_z(m, n):
 	return np.random.normal(0., 1., size=[m, n])
 
-#==================== Parameter ====================
+#Parameter
 batch_size = 32
 z_dim = 32
 c_dim = 32
 
+#Model Build
 def xavier_init(size):
     in_dim = size[0]
     xavier_stddev = 1. / tf.sqrt(in_dim / 2.)
     return tf.random_normal(shape=size, stddev=xavier_stddev)
 
-#==================== Placeholder ====================
+#Placeholder
 z1_ = tf.placeholder(tf.float32, shape=[None, z_dim])
 z2_ = tf.placeholder(tf.float32, shape=[None, z_dim])
 
@@ -153,71 +152,56 @@ x2_ = tf.placeholder(tf.float32, shape=[None, 784])
 
 s_ = tf.placeholder(tf.float32, shape=[None, 1])
 
-#==================== Generator ====================
-#Generator 1
-W_m1_g1 = tf.Variable(xavier_init([z_dim + c_dim, 128]))
-b_m1_g1 = tf.Variable(tf.zeros(shape=[128]))
+#Generator
+W_s_g1 = tf.Variable(xavier_init([z_dim + c_dim, 128]))
+b_s_g1 = tf.Variable(tf.zeros(shape=[128]))
 
 W_m1_g2 = tf.Variable(xavier_init([128,784]))
 b_m1_g2 = tf.Variable(tf.zeros(shape=[784]))
-
-var_g1 = [W_m1_g1, b_m1_g1, W_m1_g2, b_m1_g2]
-
-def Generator1(z, c):
-	z_c = tf.concat(axis=1, values=[z, c])
-	h_g1 = tf.nn.relu(tf.matmul(z_c, W_m1_g1) + b_m1_g1)
-	x_logit = tf.matmul(h_g1, W_m1_g2) + b_m1_g2
-	x_prob = tf.nn.sigmoid(x_logit)
-	return x_prob
-
-#Generator 2
-W_m2_g1 = tf.Variable(xavier_init([z_dim + c_dim, 128]))
-b_m2_g1 = tf.Variable(tf.zeros(shape=[128]))
-
 W_m2_g2 = tf.Variable(xavier_init([128,784]))
 b_m2_g2 = tf.Variable(tf.zeros(shape=[784]))
+W_m_g2 = [W_m1_g2, W_m2_g2]
+b_m_g2 = [b_m1_g2, b_m2_g2]
 
-var_g2 = [W_m2_g1, b_m2_g1, W_m2_g2, b_m2_g2]
+var_gs = [W_s_g1, b_s_g1]
+var_g1 = [W_m1_g2, b_m1_g2]
+var_g2 = [W_m2_g2, b_m2_g2]
 
-def Generator2(z, c):
+def Generator(z, c, m):
 	z_c = tf.concat(axis=1, values=[z, c])
-	h_g1 = tf.nn.relu(tf.matmul(z_c, W_m2_g1) + b_m2_g1)
-	x_logit = tf.matmul(h_g1, W_m2_g2) + b_m2_g2
-	x_prob = tf.nn.sigmoid(x_logit)
+	h_g1 = tf.nn.relu(tf.matmul(z_c, W_s_g1) + b_s_g1)
+	x_digit = tf.matmul(h_g1, W_m_g2[m]) + b_m_g2[m]
+	x_prob = tf.nn.sigmoid(x_digit)
 	return x_prob
 
-#==================== Discriminator ====================
-#Discriminator 1
+#Discriminator
 W_m1_d1 = tf.Variable(xavier_init([784,128]))
 b_m1_d1 = tf.Variable(tf.zeros(shape=[128]))
+W_m2_d1 = tf.Variable(xavier_init([784,128]))
+b_m2_d1 = tf.Variable(tf.zeros(shape=[128]))
+W_m_d1 = [W_m1_d1, W_m2_d1]
+b_m_d1 = [b_m1_d1, b_m2_d1]
 
 W_m1_d2 = tf.Variable(xavier_init([128,1]))
 b_m1_d2 = tf.Variable(tf.zeros(shape=[1]))
-
-var_d1 = [W_m1_d1, b_m1_d1, W_m1_d2, b_m1_d2]
-
-def Discriminator1(x):
-	h_d1 = tf.nn.relu(tf.matmul(x, W_m1_d1) + b_m1_d1)
-	y_r_logit = tf.matmul(h_d1, W_m1_d2) + b_m1_d2
-	y_r_prob = tf.nn.sigmoid(y_r_logit)
-	return y_r_logit, y_r_prob
-
-#Discriminator 2
-W_m2_d1 = tf.Variable(xavier_init([784,256]))
-b_m2_d1 = tf.Variable(tf.zeros(shape=[256]))
-
-W_m2_d2 = tf.Variable(xavier_init([256,1]))
+W_m2_d2 = tf.Variable(xavier_init([128,1]))
 b_m2_d2 = tf.Variable(tf.zeros(shape=[1]))
+W_m_d2 = [W_m1_d2, W_m2_d2]
+b_m_d2 = [b_m1_d2, b_m2_d2]
 
-var_d2 = [W_m2_d1, b_m2_d1, W_m2_d2, b_m2_d2]
+var_d1 = [ W_m1_d1, b_m1_d1, 
+		   W_m1_d2, b_m1_d2 ]
 
-def Discriminator2(x):
-	h_d1 = tf.nn.relu(tf.matmul(x, W_m2_d1) + b_m2_d1)
-	y_r_logit = tf.matmul(h_d1, W_m2_d2) + b_m2_d2
-	y_r_prob = tf.nn.sigmoid(y_r_logit)
-	return y_r_logit, y_r_prob
+var_d2 = [ W_m2_d1, b_m2_d1, 
+		   W_m2_d2, b_m2_d2 ]
 
-#==================== Synchronizer ====================
+def Discriminator(x, m):
+	h_d1 = tf.nn.relu(tf.matmul(x, W_m_d1[m]) + b_m_d1[m])
+	y_r_digit = tf.matmul(h_d1, W_m_d2[m]) + b_m_d2[m]
+	y_r_prob = tf.nn.sigmoid(y_r_digit)
+	return y_r_digit, y_r_prob
+
+#Synchronizer
 W_m1_s1 = tf.Variable(xavier_init([784,256]))
 b_m1_s1 = tf.Variable(tf.zeros(shape=[256]))
 W_m2_s1 = tf.Variable(xavier_init([784,256]))
@@ -244,19 +228,19 @@ def Synchronizer(x1, x2):
 	y_s_prob = tf.nn.sigmoid(y_s_logit)
 	return y_s_logit, y_s_prob
 
-G1_sample = Generator1(z1_, c1_)
-G2_sample = Generator2(z2_, c2_)
+G1_sample = Generator(z1_, c1_, 0)
+G2_sample = Generator(z2_, c2_, 1)
 
-D1_real_logit, D1_real_prob = Discriminator1(x1_)
-D1_fake_logit, D1_fake_prob = Discriminator1(G1_sample)
-
-D2_real_logit, D2_real_prob = Discriminator2(x2_)
-D2_fake_logit, D2_fake_prob = Discriminator2(G2_sample)
+D1_real_logit, D1_real_prob = Discriminator(x1_, 0)
+D2_real_logit, D2_real_prob = Discriminator(x2_, 1)
+D1_fake_logit, D1_fake_prob = Discriminator(G1_sample, 0)
+D2_fake_logit, D2_fake_prob = Discriminator(G2_sample, 1)
 
 S_real_logit, S_real_prob = Synchronizer(x1_, x2_)
 S_fake_logit, S_fake_prob = Synchronizer(G1_sample, G2_sample)
 
-#==================== Loss & Train ====================
+#Train Generator & Discriminator
+
 #Vanilla GAN Loss
 D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real_logit, labels=tf.ones_like(D1_real_logit)))
 D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_logit, labels=tf.zeros_like(D1_fake_logit)))
@@ -276,24 +260,22 @@ D2_loss = -tf.reduce_mean(tf.log(D2_real_prob + eps) + tf.log(1. - D2_fake_prob 
 G1_loss = -tf.reduce_mean(tf.log(D1_fake_prob + eps))
 G2_loss = -tf.reduce_mean(tf.log(D2_fake_prob + eps))
 '''
+
 #Train Synchronizer
 S_real_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_real_prob - s_), reduction_indices=[1]))
 S_fake_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_fake_prob - s_), reduction_indices=[1]))
 
 #Solver 
-G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_g1)
-G2_solver = tf.train.AdamOptimizer().minimize(G2_loss, var_list=var_g2)
+G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_gs + var_g1)
+G2_solver = tf.train.AdamOptimizer().minimize(G2_loss, var_list=var_gs + var_g2)
 
 D1_solver = tf.train.AdamOptimizer().minimize(D1_loss, var_list=var_d1)
 D2_solver = tf.train.AdamOptimizer().minimize(D2_loss, var_list=var_d2)
 
 S_real_solver = tf.train.AdamOptimizer().minimize(S_real_loss, var_list=var_s)
-S_fake_solver = tf.train.AdamOptimizer().minimize(S_fake_loss, var_list=var_g1 + var_g2)
+S_fake_solver = tf.train.AdamOptimizer().minimize(S_fake_loss, var_list=var_gs + var_g1 + var_g2)
 
-sess = tf.Session()
-sess.run(tf.global_variables_initializer())
-
-#==================== Dataset ====================
+#Read Dataset
 mnist_digit = input_data.read_data_sets('MNIST_digit', one_hot=False)
 x_digit = mnist_digit.train.images
 y_digit = mnist_digit.train.labels
@@ -308,7 +290,11 @@ x2_train = class_list(x_fashion, y_fashion, 10)
 x_digit_rot = scipy.ndimage.interpolation.rotate(x_digit.reshape(-1, 28, 28), 90, axes=(1, 2)).reshape(-1, 28*28)
 x2_train = class_list(x_digit_rot, y_digit, 10)
 '''
-#==================== Main ====================
+
+sess = tf.Session()
+sess.run(tf.global_variables_initializer())
+
+#Main
 if not os.path.exists('out/'):
     os.makedirs('out/')
 
