@@ -132,14 +132,26 @@ def sample_normal_z(m, n):
 	return np.random.normal(0., 1., size=[m, n])
 
 #==================== Parameter ====================
-batch_size = 32
+batch_size = 128
 z_dim = 32
 c_dim = 32
 
 def xavier_init(size):
-    in_dim = size[0]
-    xavier_stddev = 1. / tf.sqrt(in_dim / 2.)
-    return tf.random_normal(shape=size, stddev=xavier_stddev)
+    if len(size) == 4:
+        n_inputs = size[0]*size[1]*size[2]
+        n_outputs = size[3]
+    else:
+        n_inputs = size[0]
+        n_outputs = size[1]
+    
+    stddev = math.sqrt(3.0 / (n_inputs + n_outputs))
+    return tf.truncated_normal(size, stddev=stddev)
+
+def conv2d(x, W, stride):
+    return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
+
+def deconv2d(x, W, output_shape, stride=[1,2,2,1]):
+    return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #==================== Placeholder ====================
 z1_ = tf.placeholder(tf.float32, shape=[None, z_dim])
@@ -155,67 +167,115 @@ s_ = tf.placeholder(tf.float32, shape=[None, 1])
 
 #==================== Generator ====================
 #Generator 1
-W_m1_g1 = tf.Variable(xavier_init([z_dim + c_dim, 128]))
-b_m1_g1 = tf.Variable(tf.zeros(shape=[128]))
+W_m1_g_fc1 = tf.Variable(xavier_init([z_dim+c_dim,7*7*32]))
+b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*32]))
 
-W_m1_g2 = tf.Variable(xavier_init([128,784]))
-b_m1_g2 = tf.Variable(tf.zeros(shape=[784]))
+W_m1_g_conv2 = tf.Variable(xavier_init([5,5,16,32]))
+b_m1_g_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
-var_g1 = [W_m1_g1, b_m1_g1, W_m1_g2, b_m1_g2]
+W_m1_g_conv3 = tf.Variable(xavier_init([5,5,1,16]))
+b_m1_g_conv3 = tf.Variable(tf.zeros(shape=[1]))
+
+var_g1 = [W_m1_g_fc1, b_m1_g_fc1, W_m1_g_conv2, b_m1_g_conv2, W_m1_g_conv3, b_m1_g_conv3]
 
 def Generator1(z, c):
-	z_c = tf.concat(axis=1, values=[z, c])
-	h_g1 = tf.nn.relu(tf.matmul(z_c, W_m1_g1) + b_m1_g1)
-	x_logit = tf.matmul(h_g1, W_m1_g2) + b_m1_g2
-	x_prob = tf.nn.sigmoid(x_logit)
-	return x_prob
+    z_c = tf.concat(axis=1, values=[z, c])
+    h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m1_g_fc1) + b_m1_g_fc1)
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 32])
+
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 16])
+    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2) + b_m1_g_conv2)
+
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
+
+    h_g_re3 = tf.reshape(h_g_conv3, [-1,784])
+    return h_g_re3
 
 #Generator 2
-W_m2_g1 = tf.Variable(xavier_init([z_dim + c_dim, 256]))
-b_m2_g1 = tf.Variable(tf.zeros(shape=[256]))
+W_m2_g_fc1 = tf.Variable(xavier_init([z_dim+c_dim,7*7*32]))
+b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*32]))
 
-W_m2_g2 = tf.Variable(xavier_init([256,784]))
-b_m2_g2 = tf.Variable(tf.zeros(shape=[784]))
+W_m2_g_conv2 = tf.Variable(xavier_init([5,5,16,32]))
+b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
-var_g2 = [W_m2_g1, b_m2_g1, W_m2_g2, b_m2_g2]
+W_m2_g_conv3 = tf.Variable(xavier_init([5,5,1,16]))
+b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[1]))
+
+var_g2 = [W_m2_g_fc1, b_m2_g_fc1, W_m2_g_conv2, b_m2_g_conv2, W_m2_g_conv3, b_m2_g_conv3]
 
 def Generator2(z, c):
-	z_c = tf.concat(axis=1, values=[z, c])
-	h_g1 = tf.nn.relu(tf.matmul(z_c, W_m2_g1) + b_m2_g1)
-	x_logit = tf.matmul(h_g1, W_m2_g2) + b_m2_g2
-	x_prob = tf.nn.sigmoid(x_logit)
-	return x_prob
+    z_c = tf.concat(axis=1, values=[z, c])
+    h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m2_g_fc1) + b_m2_g_fc1)
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 32])
+
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 16])
+    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
+
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
+
+    h_g_re3 = tf.reshape(h_g_conv3, [-1,784])
+    return h_g_re3
 
 #==================== Discriminator ====================
 #Discriminator 1
-W_m1_d1 = tf.Variable(xavier_init([784,128]))
-b_m1_d1 = tf.Variable(tf.zeros(shape=[128]))
+W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,4]))
+b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[4]))
 
-W_m1_d2 = tf.Variable(xavier_init([128,1]))
-b_m1_d2 = tf.Variable(tf.zeros(shape=[1]))
+W_m1_d_conv2 = tf.Variable(xavier_init([5,5,4,8]))
+b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[8]))
 
-var_d1 = [W_m1_d1, b_m1_d1, W_m1_d2, b_m1_d2]
+W_m1_d_fc3 = tf.Variable(xavier_init([7*7*8, 64]))
+b_m1_d_fc3 = tf.Variable(tf.zeros(shape=[64]))
+
+W_m1_d_fc4 = tf.Variable(xavier_init([64, 1]))
+b_m1_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
+
+var_d1 = [W_m1_d_conv1, b_m1_d_conv1, W_m1_d_conv2, b_m1_d_conv2, W_m1_d_fc3, b_m1_d_fc3, W_m1_d_fc4, b_m1_d_fc4]
 
 def Discriminator1(x):
-	h_d1 = tf.nn.relu(tf.matmul(x, W_m1_d1) + b_m1_d1)
-	y_r_logit = tf.matmul(h_d1, W_m1_d2) + b_m1_d2
-	y_r_prob = tf.nn.sigmoid(y_r_logit)
-	return y_r_logit, y_r_prob
+	x_re = tf.reshape(x, [-1,28,28,1])
+	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1]) + b_m1_d_conv1)
+
+	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1]) + b_m1_d_conv2)
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*8])
+
+	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m1_d_fc3) + b_m1_d_fc3)
+	
+	y_logit = tf.matmul(h_d_fc3, W_m1_d_fc4) + b_m1_d_fc4
+	y_prob = tf.nn.sigmoid(y_logit)
+	
+	return y_logit, y_prob
 
 #Discriminator 2
-W_m2_d1 = tf.Variable(xavier_init([784,256]))
-b_m2_d1 = tf.Variable(tf.zeros(shape=[256]))
+W_m2_d_conv1 = tf.Variable(xavier_init([5,5,1,8]))
+b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
 
-W_m2_d2 = tf.Variable(xavier_init([256,1]))
-b_m2_d2 = tf.Variable(tf.zeros(shape=[1]))
+W_m2_d_conv2 = tf.Variable(xavier_init([5,5,8,16]))
+b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
-var_d2 = [W_m2_d1, b_m2_d1, W_m2_d2, b_m2_d2]
+W_m2_d_fc3 = tf.Variable(xavier_init([7*7*16, 128]))
+b_m2_d_fc3 = tf.Variable(tf.zeros(shape=[128]))
+
+W_m2_d_fc4 = tf.Variable(xavier_init([128, 1]))
+b_m2_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
+
+var_d2 = [W_m2_d_conv1, b_m2_d_conv1, W_m2_d_conv2, b_m2_d_conv2, W_m2_d_fc3, b_m2_d_fc3, W_m2_d_fc4, b_m2_d_fc4]
 
 def Discriminator2(x):
-	h_d1 = tf.nn.relu(tf.matmul(x, W_m2_d1) + b_m2_d1)
-	y_r_logit = tf.matmul(h_d1, W_m2_d2) + b_m2_d2
-	y_r_prob = tf.nn.sigmoid(y_r_logit)
-	return y_r_logit, y_r_prob
+	x_re = tf.reshape(x, [-1,28,28,1])
+	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m2_d_conv1, [1,2,2,1]) + b_m2_d_conv1)
+
+	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1]) + b_m2_d_conv2)
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
+
+	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m2_d_fc3) + b_m2_d_fc3)
+	
+	y_logit = tf.matmul(h_d_fc3, W_m2_d_fc4) + b_m2_d_fc4
+	y_prob = tf.nn.sigmoid(y_logit)
+	
+	return y_logit, y_prob 
 
 #==================== Synchronizer ====================
 W_m1_s1 = tf.Variable(xavier_init([784,256]))
@@ -342,9 +402,9 @@ for it in range(500001):
 
 	_, loss_sr = sess.run([S_real_solver, S_real_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
 	_, loss_sf = sess.run([S_fake_solver, S_fake_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
-	
+	#loss_sf = 0.
 	#Show result
-	if it%1000 == 0:
+	if it%500 == 0:
 		print("Iter: {}\n D1_loss: {:.4}, D2_loss: {:.4}\n G1_loss: {:.4}, G2_loss: {:.4}\n Sr_loss: {:.4}, Sf_loss: {:.4}\n"
 				.format(it, loss_d1, loss_d2, loss_g1, loss_g2, loss_sr, loss_sf))
 		
