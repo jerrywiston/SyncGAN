@@ -1,10 +1,10 @@
-0	T-shirt/top
-1	Trouser
-2	Pullover
-3	Dress
-4	Coat
-5	Sandal
-6	Shirt
-7	Sneaker
-8	Bag
-9	Ankle boot
+0	T-shirt/top	T«ò
+1	Trouser 	¿Ç¤l
+2	Pullover	®M­m
+3	Dress		³s¦ç¸È
+4	Coat		¤j¦ç
+5	Sandal		²D¾c
+6	Shirt		Å¨­m
+7	Sneaker		¹B°Ê¾c
+8	Bag		³U¤l
+9	Ankle boot	¹u¤l

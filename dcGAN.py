@@ -135,8 +135,8 @@ sess.run(tf.global_variables_initializer())
 if not os.path.exists('out/'):
     os.makedirs('out/')
 
-#mnist = input_data.read_data_sets('MNIST_digit', one_hot=True)
-mnist = input_data.read_data_sets('MNIST_fashion', one_hot=True)
+mnist = input_data.read_data_sets('MNIST_digit', one_hot=True)
+#mnist = input_data.read_data_sets('MNIST_fashion', one_hot=True)
 
 i=0
 for it in range(20001):
