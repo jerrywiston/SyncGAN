@@ -6,11 +6,12 @@ import matplotlib.gridspec as gridspec
 import os
 import random
 import math
+import scipy.ndimage.interpolation
 
 #==================== Draw Figure ====================
-def plot(samples):
-    fig = plt.figure(figsize=(4, 4))
-    gs = gridspec.GridSpec(4, 4)
+def plot(samples, size):
+    fig = plt.figure(figsize=size)
+    gs = gridspec.GridSpec(size[0], size[1])
     gs.update(wspace=0.05, hspace=0.05)
 
     for i, sample in enumerate(samples):
@@ -23,10 +24,24 @@ def plot(samples):
 
     return fig
 
-def plot_x(id, type, samp):
-    fig = plot(samp)
+def plot_x(id, type, samp, size=(4,4)):
+    fig = plot(samp, size)
     plt.savefig('out/{}_{}.png'.format(str(id).zfill(4), type), bbox_inches='tight')
     plt.close(fig)
+
+def samp_fig(sess, size):
+	x_samp = np.zeros([size[0], size[1], 784], dtype=np.float32)
+
+	for i in range(int(size[0]/2)):
+		z1_batch = sample_z(size[1], z_dim)
+		z2_batch = sample_z(size[1], z_dim)
+		c_batch = sample_z(size[1], c_dim)
+		
+		x_samp[i*2] = sess.run(G1_sample, feed_dict={z1_: z1_batch, c1_: c_batch})
+		x_samp[i*2+1] = sess.run(G2_sample, feed_dict={z2_: z2_batch, c2_: c_batch})
+
+	x_samp = x_samp.reshape(size[0]*size[1], 784)
+	return x_samp
 
 #==================== Data Batch ====================
 def class_list(imgs, labels, c=10):
@@ -125,16 +140,16 @@ def nsync_match_next_batch(img1_list, img2_list, size):
 
 	return img1_samp_np, img2_samp_np, sync_samp_np
 
-def sample_z(m, n):
-    return np.random.uniform(-1., 1., size=[m, n])
-
-def sample_normal_z(m, n):
-	return np.random.normal(0., 1., size=[m, n])
+def sample_z(m, n, type=1):
+    if type == 0:
+    	return np.random.uniform(-1., 1., size=[m, n])
+    else:
+    	return np.random.normal(0., 1., size=[m, n])
 
 #==================== Parameter ====================
 batch_size = 128
-z_dim = 1
-c_dim = 63
+z_dim = 8
+c_dim = 56
 
 def xavier_init(size):
     if len(size) == 4:
@@ -170,7 +185,7 @@ s_ = tf.placeholder(tf.float32, shape=[None, 1])
 W_m1_g_fc1 = tf.Variable(xavier_init([z_dim+c_dim,7*7*32]))
 b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*32]))
 
-W_m1_g_conv2 = tf.Variable(xavier_init([5,5,16,32]))
+W_m1_g_conv2 = tf.Variable(xavier_init([3,3,16,32]))
 b_m1_g_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
 W_m1_g_conv3 = tf.Variable(xavier_init([5,5,1,16]))
@@ -196,7 +211,7 @@ def Generator1(z, c):
 W_m2_g_fc1 = tf.Variable(xavier_init([z_dim+c_dim,7*7*32]))
 b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*32]))
 
-W_m2_g_conv2 = tf.Variable(xavier_init([5,5,16,32]))
+W_m2_g_conv2 = tf.Variable(xavier_init([3,3,16,32]))
 b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
 W_m2_g_conv3 = tf.Variable(xavier_init([5,5,1,16]))
@@ -223,7 +238,7 @@ def Generator2(z, c):
 W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,4]))
 b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[4]))
 
-W_m1_d_conv2 = tf.Variable(xavier_init([5,5,4,8]))
+W_m1_d_conv2 = tf.Variable(xavier_init([3,3,4,8]))
 b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[8]))
 
 W_m1_d_fc3 = tf.Variable(xavier_init([7*7*8, 64]))
@@ -252,7 +267,7 @@ def Discriminator1(x):
 W_m2_d_conv1 = tf.Variable(xavier_init([5,5,1,8]))
 b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
 
-W_m2_d_conv2 = tf.Variable(xavier_init([5,5,8,16]))
+W_m2_d_conv2 = tf.Variable(xavier_init([3,3,8,16]))
 b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
 W_m2_d_fc3 = tf.Variable(xavier_init([7*7*16, 128]))
@@ -377,7 +392,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(200001):
+for it in range(6001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
@@ -400,26 +415,22 @@ for it in range(200001):
 	#Training
 	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
 	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch, x2_:x2_batch})
-	#_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
 	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
 
-
 	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
-	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch})	
+	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch})
 	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
-
+		
 	#Show result
-	if it%1000 == 0:
+	if it%100 == 0:
 		print("Iter: {}\n G1_loss: {:.4}, G2_loss: {:.4}, Gs_loss: {:.4}\n D1_loss: {:.4}, D2_loss: {:.4}, Ss_loss: {:.4}\n"
 				.format(it, loss_g1, loss_g2, loss_d1, loss_d2, loss_ss, loss_gs))
-						
-		z1_batch = sample_z(8, z_dim)
-		z2_batch = sample_z(8, z_dim)
-		c_batch = sample_z(8, c_dim)
 		
-		x1_samp = sess.run(G1_sample, feed_dict={z1_: z1_batch, c1_: c_batch})
-		x2_samp = sess.run(G2_sample, feed_dict={z2_: z2_batch, c2_: c_batch})
-		x_samp = np.concatenate((x1_samp, x2_samp), axis=0)
-		
+		x_samp = samp_fig(sess, (4,4))
 		plot_x(i,'samp', x_samp)
 		i += 1
+
+print("Save result figure ...")
+size = (16,16)
+x_samp = samp_fig(sess, size)
+plot_x(0,'result', x_samp, size)
