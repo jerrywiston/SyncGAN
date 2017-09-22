@@ -147,7 +147,7 @@ def sample_z(m, n, type=1):
     	return np.random.normal(0., 1., size=[m, n])
 
 #==================== Parameter ====================
-batch_size = 128
+batch_size = 64
 z_dim = 8
 c_dim = 56
 
@@ -392,7 +392,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(6001):
+for it in range(10001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
