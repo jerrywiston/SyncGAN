@@ -1,7 +1,3 @@
 *.gz
-
-out_save/
-*.png
-
 out/
-*.png
+out_save/
