@@ -1,6 +1,6 @@
 # Synchronized-GAN (SyncGAN)
 A generative model based on GAN which can simultaneously generate cross-domain or cross-modal synchronized data.
-<img src="https://github.com/jerrywiston/SyncGAN/blob/master/fig/SyncGAN.png" width="500" alt="SyncGAN" align=center />
+
 ## Cross-modal Generate  
 (MNIST-digit & MNIST-fashion)<br>
 <img src="https://github.com/jerrywiston/SyncGAN/blob/master/fig/CrossModal_result.png" 
