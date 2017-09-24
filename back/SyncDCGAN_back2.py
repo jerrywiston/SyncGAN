@@ -182,13 +182,13 @@ s_ = tf.placeholder(tf.float32, shape=[None, 1])
 
 #==================== Generator ====================
 #Generator 1
-W_m1_g_fc1 = tf.Variable(xavier_init([z_dim+c_dim,7*7*64]))
-b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*64]))
+W_m1_g_fc1 = tf.Variable(xavier_init([z_dim+c_dim,7*7*32]))
+b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*32]))
 
-W_m1_g_conv2 = tf.Variable(xavier_init([3,3,32,64]))
-b_m1_g_conv2 = tf.Variable(tf.zeros(shape=[32]))
+W_m1_g_conv2 = tf.Variable(xavier_init([3,3,16,32]))
+b_m1_g_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
-W_m1_g_conv3 = tf.Variable(xavier_init([5,5,1,32]))
+W_m1_g_conv3 = tf.Variable(xavier_init([5,5,1,16]))
 b_m1_g_conv3 = tf.Variable(tf.zeros(shape=[1]))
 
 var_g1 = [W_m1_g_fc1, b_m1_g_fc1, W_m1_g_conv2, b_m1_g_conv2, W_m1_g_conv3, b_m1_g_conv3]
@@ -196,9 +196,9 @@ var_g1 = [W_m1_g_fc1, b_m1_g_fc1, W_m1_g_conv2, b_m1_g_conv2, W_m1_g_conv3, b_m1
 def Generator1(z, c):
     z_c = tf.concat(axis=1, values=[z, c])
     h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m1_g_fc1) + b_m1_g_fc1)
-    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 64])
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 32])
 
-    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 32])
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 16])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2) + b_m1_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 1])
@@ -356,7 +356,7 @@ G2_loss = -tf.reduce_mean(tf.log(D2_fake_prob + eps))
 #Gs_loss = tf.reduce_mean(tf.reduce_sum(tf.square(S_fake_prob - s_), reduction_indices=[1]))
 Ss_real_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_real_logit, labels=s_))
 Ss_fake_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_logit, labels=tf.zeros_like(S_fake_logit)))
-Ss_loss = Ss_real_loss #+ Ss_fake_loss
+Ss_loss = Ss_real_loss + Ss_fake_loss
 Gs_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_logit, labels=s_))
 
 #Solver 
@@ -392,7 +392,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(20001):
+for it in range(10001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
@@ -423,10 +423,8 @@ for it in range(20001):
 		
 	#Show result
 	if it%100 == 0:
-		print("Iter: {}".format(it))
-		print("  G1_loss: {:.4}, G2_loss: {:.4},".format(loss_g1, loss_g2))	
-		print("  D1_loss: {:.4}, D2_loss: {:.4},".format(loss_d1, loss_d2))
-		print("  Ss_loss: {:.4}, Gs_loss: {:.4}\n".format(loss_ss, loss_gs))
+		print("Iter: {}\n G1_loss: {:.4}, G2_loss: {:.4}, Gs_loss: {:.4}\n D1_loss: {:.4}, D2_loss: {:.4}, Ss_loss: {:.4}\n"
+				.format(it, loss_g1, loss_g2, loss_d1, loss_d2, loss_ss, loss_gs))
 		
 		x_samp = samp_fig(sess, (4,4))
 		plot_x(i,'samp', x_samp)

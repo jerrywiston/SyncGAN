@@ -4,3 +4,4 @@ back3: share synchronizer and discriminator weight
 back4: +info XXX
 back5: split c
 back6: split discriminator
+DCGAN_back2: convolution sync
