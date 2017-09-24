@@ -40,6 +40,12 @@ def sample_z(m, n):
     return np.random.uniform(-1., 1., size=[m, n])
 
 #================================= Cifar Handling =================================
+def labels_one_hot(labels_raw, dim):
+    labels = np.zeros((len(labels_raw), dim))
+    for i in range(len(labels_raw)):
+        labels[i][labels_raw[i]] = 1.
+    return labels
+
 def cifar_read(file):
     import pickle
     with open(file, 'rb') as fo:
@@ -50,8 +56,8 @@ def cifar_data_extract(dict):
     imgs_raw = dict[b'data'].astype("uint8")
     imgs = np.array(imgs_raw, dtype=float) / 255.0   
     imgs = imgs.reshape([-1, 3, 32, 32]).transpose([0, 2, 3, 1])
-    print(imgs.shape)
-    return imgs
+    labels = labels_one_hot(dict[b'labels'], 10)
+    return imgs, labels
 
 def cifar_next_batch(imgs, labels, size):
     img_samp = np.ndarray(shape=(size, 32, 32 ,3))
@@ -138,17 +144,17 @@ b_d_fc5 = tf.Variable(tf.zeros(shape=[1]))
 var_d = [W_d_conv1, b_d_conv1, W_d_conv2, b_d_conv2, W_d_conv3, b_d_conv3, W_d_fc4, b_d_fc4, W_d_fc5, b_d_fc5]
 
 def Discriminator(x):
-	h_d_conv1 = tf.nn.relu(conv2d(x, W_d_conv1, [1,2,2,1]) + b_d_conv1)
-	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_d_conv2, [1,2,2,1]) + b_d_conv2)
+    h_d_conv1 = tf.nn.relu(conv2d(x, W_d_conv1, [1,2,2,1]) + b_d_conv1)
+    h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_d_conv2, [1,2,2,1]) + b_d_conv2)
     h_d_conv3 = tf.nn.relu(conv2d(h_d_conv2, W_d_conv3, [1,2,2,1]) + b_d_conv3)
 
-	h_d_re3 = tf.reshape(h_d_conv3, [-1,4*4*32])
-	h_d_fc4 = tf.nn.relu(tf.matmul(h_d_re3, W_d_fc4) + b_d_fc4)
-	
-	y_logit = tf.matmul(h_d_fc4, W_d_fc5) + b_d_fc5
-	y_prob = tf.nn.sigmoid(y_logit)
-	
-	return y_prob, y_logit 
+    h_d_re3 = tf.reshape(h_d_conv3, [-1,4*4*32])
+    h_d_fc4 = tf.nn.relu(tf.matmul(h_d_re3, W_d_fc4) + b_d_fc4)
+
+    y_logit = tf.matmul(h_d_fc4, W_d_fc5) + b_d_fc5
+    y_prob = tf.nn.sigmoid(y_logit)
+
+    return y_prob, y_logit
 
 G_sample = Generator(z_)
 D_real, D_logit_real = Discriminator(x_)
@@ -170,12 +176,16 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 dict = cifar_read("cifar-10-batches-py/data_batch_1")
-x_train = cifar_data_extract(dict)
+x_train, y_train = cifar_data_extract(dict)
+for i in range(10):
+    print(y_train[i])
+    plt.imshow(x_train[i])
+    plt.show()
 
 i=0
 for it in range(20001):
     #Train weight & latent
-    x_batch, _ = cifar_next_batch(x_train, z_train, batch_size)
+    x_batch, _ = cifar_next_batch(x_train, y_train, batch_size)
 
     _, D_loss_curr = sess.run([D_solver, D_loss], feed_dict={x_: x_batch, z_: sample_z(batch_size, z_dim)})
     _, G_loss_curr = sess.run([G_solver, G_loss], feed_dict={z_: sample_z(batch_size, z_dim)})
