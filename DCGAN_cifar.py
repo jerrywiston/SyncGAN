@@ -90,16 +90,16 @@ z_ = tf.placeholder(tf.float32, shape=[None, z_dim])
 x_ = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
 
 #Generator
-W_g_fc1 = tf.Variable(xavier_init([z_dim,4*4*64]))
-b_g_fc1 = tf.Variable(tf.zeros(shape=[4*4*64]))
+W_g_fc1 = tf.Variable(xavier_init([z_dim,4*4*128]))
+b_g_fc1 = tf.Variable(tf.zeros(shape=[4*4*128]))
 
-W_g_conv2 = tf.Variable(xavier_init([3,3,32,64]))
-b_g_conv2 = tf.Variable(tf.zeros(shape=[32]))
+W_g_conv2 = tf.Variable(xavier_init([3,3,64,128]))
+b_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
 
-W_g_conv3 = tf.Variable(xavier_init([3,3,16,32]))
-b_g_conv3 = tf.Variable(tf.zeros(shape=[16]))
+W_g_conv3 = tf.Variable(xavier_init([3,3,32,64]))
+b_g_conv3 = tf.Variable(tf.zeros(shape=[32]))
 
-W_g_conv4 = tf.Variable(xavier_init([5,5,3,16]))
+W_g_conv4 = tf.Variable(xavier_init([5,5,3,32]))
 b_g_conv4 = tf.Variable(tf.zeros(shape=[3]))
 
 var_g = [W_g_fc1, b_g_fc1, W_g_conv2, b_g_conv2, W_g_conv3, b_g_conv3, W_g_conv4, b_g_conv4]
@@ -112,12 +112,12 @@ def deconv2d(x, W, output_shape, stride=[1,2,2,1]):
 
 def Generator(z):
     h_g_fc1 = tf.nn.relu(tf.matmul(z, W_g_fc1) + b_g_fc1)
-    h_g_re1 = tf.reshape(h_g_fc1, [-1, 4, 4, 64])
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 4, 4, 128])
 
-    output_shape_g2 = tf.stack([tf.shape(z)[0], 8, 8, 32])
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 8, 8, 64])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_g_conv2, output_shape_g2) + b_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 16, 16, 16])
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 16, 16, 32])
     h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_g_conv3, output_shape_g3) + b_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 32, 32, 3])
@@ -126,19 +126,19 @@ def Generator(z):
     return h_g_conv4
 
 #Discriminator
-W_d_conv1 = tf.Variable(xavier_init([5,5,3,8]))
-b_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
+W_d_conv1 = tf.Variable(xavier_init([5,5,3,16]))
+b_d_conv1 = tf.Variable(tf.zeros(shape=[16]))
 
-W_d_conv2 = tf.Variable(xavier_init([3,3,8,16]))
-b_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
+W_d_conv2 = tf.Variable(xavier_init([3,3,16,32]))
+b_d_conv2 = tf.Variable(tf.zeros(shape=[32]))
 
-W_d_conv3 = tf.Variable(xavier_init([3,3,16,32]))
-b_d_conv3 = tf.Variable(tf.zeros(shape=[32]))
+W_d_conv3 = tf.Variable(xavier_init([3,3,32,64]))
+b_d_conv3 = tf.Variable(tf.zeros(shape=[64]))
 
-W_d_fc4 = tf.Variable(xavier_init([4*4*32, 128]))
-b_d_fc4 = tf.Variable(tf.zeros(shape=[128]))
+W_d_fc4 = tf.Variable(xavier_init([4*4*64, 256]))
+b_d_fc4 = tf.Variable(tf.zeros(shape=[256]))
 
-W_d_fc5 = tf.Variable(xavier_init([128, 1]))
+W_d_fc5 = tf.Variable(xavier_init([256, 1]))
 b_d_fc5 = tf.Variable(tf.zeros(shape=[1]))
 
 var_d = [W_d_conv1, b_d_conv1, W_d_conv2, b_d_conv2, W_d_conv3, b_d_conv3, W_d_fc4, b_d_fc4, W_d_fc5, b_d_fc5]
@@ -148,7 +148,7 @@ def Discriminator(x):
     h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_d_conv2, [1,2,2,1]) + b_d_conv2)
     h_d_conv3 = tf.nn.relu(conv2d(h_d_conv2, W_d_conv3, [1,2,2,1]) + b_d_conv3)
 
-    h_d_re3 = tf.reshape(h_d_conv3, [-1,4*4*32])
+    h_d_re3 = tf.reshape(h_d_conv3, [-1,4*4*64])
     h_d_fc4 = tf.nn.relu(tf.matmul(h_d_re3, W_d_fc4) + b_d_fc4)
 
     y_logit = tf.matmul(h_d_fc4, W_d_fc5) + b_d_fc5
@@ -177,13 +177,14 @@ if not os.path.exists('out/'):
 
 dict = cifar_read("cifar-10-batches-py/data_batch_1")
 x_train, y_train = cifar_data_extract(dict)
+'''
 for i in range(10):
     print(y_train[i])
     plt.imshow(x_train[i])
     plt.show()
-
+'''
 i=0
-for it in range(20001):
+for it in range(100001):
     #Train weight & latent
     x_batch, _ = cifar_next_batch(x_train, y_train, batch_size)
 
