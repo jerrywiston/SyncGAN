@@ -82,24 +82,24 @@ def xavier_init(size):
     return tf.truncated_normal(size, stddev=stddev)
 
 #Parameter
-z_dim = 32
-batch_size = 128
+z_dim = 128
+batch_size = 64
 
 #Placeholder
 z_ = tf.placeholder(tf.float32, shape=[None, z_dim])
 x_ = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
 
 #Generator
-W_g_fc1 = tf.Variable(xavier_init([z_dim,4*4*128]))
-b_g_fc1 = tf.Variable(tf.zeros(shape=[4*4*128]))
+W_g_fc1 = tf.Variable(xavier_init([z_dim,4*4*256]))
+b_g_fc1 = tf.Variable(tf.zeros(shape=[4*4*256]))
 
-W_g_conv2 = tf.Variable(xavier_init([3,3,64,128]))
-b_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
+W_g_conv2 = tf.Variable(xavier_init([3,3,128,256]))
+b_g_conv2 = tf.Variable(tf.zeros(shape=[128]))
 
-W_g_conv3 = tf.Variable(xavier_init([3,3,32,64]))
-b_g_conv3 = tf.Variable(tf.zeros(shape=[32]))
+W_g_conv3 = tf.Variable(xavier_init([3,3,64,128]))
+b_g_conv3 = tf.Variable(tf.zeros(shape=[64]))
 
-W_g_conv4 = tf.Variable(xavier_init([5,5,3,32]))
+W_g_conv4 = tf.Variable(xavier_init([5,5,3, 64]))
 b_g_conv4 = tf.Variable(tf.zeros(shape=[3]))
 
 var_g = [W_g_fc1, b_g_fc1, W_g_conv2, b_g_conv2, W_g_conv3, b_g_conv3, W_g_conv4, b_g_conv4]
@@ -112,12 +112,12 @@ def deconv2d(x, W, output_shape, stride=[1,2,2,1]):
 
 def Generator(z):
     h_g_fc1 = tf.nn.relu(tf.matmul(z, W_g_fc1) + b_g_fc1)
-    h_g_re1 = tf.reshape(h_g_fc1, [-1, 4, 4, 128])
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 4, 4, 256])
 
-    output_shape_g2 = tf.stack([tf.shape(z)[0], 8, 8, 64])
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 8, 8, 128])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_g_conv2, output_shape_g2) + b_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 16, 16, 32])
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 16, 16, 64])
     h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_g_conv3, output_shape_g3) + b_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 32, 32, 3])
