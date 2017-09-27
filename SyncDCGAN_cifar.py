@@ -205,38 +205,45 @@ def Generator1(z, c):
     return h_g_re3
 
 #Generator 2
-W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim+c_dim,4*4*256]))
-b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[4*4*256]))
+W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim+c_dim,4*4*128]))
+b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[4*4*128]))
 
-W_m2_g_conv2 = tf.Variable(xavier_init([3,3,128,256]))
-b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[128]))
+W_m2_g_conv2 = tf.Variable(xavier_init([3,3,64,128]))
+b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
 
-W_m2_g_conv3 = tf.Variable(xavier_init([3,3,64,128]))
-b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[64]))
+W_m2_g_conv3 = tf.Variable(xavier_init([3,3,32,64]))
+b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[32]))
 
-W_m2_g_conv4 = tf.Variable(xavier_init([5,5,3, 64]))
-b_m2_g_conv4 = tf.Variable(tf.zeros(shape=[3]))
+W_m2_g_conv4 = tf.Variable(xavier_init([3,3,16,32]))
+b_m2_g_conv4 = tf.Variable(tf.zeros(shape=[16]))
+
+W_m2_g_conv5 = tf.Variable(xavier_init([5,5,3,16]))
+b_m2_g_conv5 = tf.Variable(tf.zeros(shape=[3]))
 
 var_g2 = [W_m2_g_fc1, b_m2_g_fc1, 
 		 W_m2_g_conv2, b_m2_g_conv2, 
 		 W_m2_g_conv3, b_m2_g_conv3, 
-		 W_m2_g_conv4, b_m2_g_conv4]
+		 W_m2_g_conv4, b_m2_g_conv4,
+		 W_m2_g_conv5, b_m2_g_conv5]
 
 def Generator2(z, c):
     z_c = tf.concat(axis=1, values=[z, c])
     h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m2_g_fc1) + b_m2_g_fc1)
-    h_g_re1 = tf.reshape(h_g_fc1, [-1, 4, 4, 256])
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 4, 4, 128])
 
-    output_shape_g2 = tf.stack([tf.shape(z)[0], 8, 8, 128])
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 8, 8, 64])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 16, 16, 64])
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 16, 16, 32])
     h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
 
-    output_shape_g4 = tf.stack([tf.shape(z)[0], 32, 32, 3])
-    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4) + b_m2_g_conv4)
+    output_shape_g4 = tf.stack([tf.shape(z)[0], 16, 16, 16])
+    h_g_conv4 = tf.nn.relu(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m2_g_conv4)
 
-    return h_g_conv4
+    output_shape_g5 = tf.stack([tf.shape(z)[0], 32, 32, 3])
+    h_g_conv5 = tf.nn.sigmoid(deconv2d(h_g_conv4, W_m2_g_conv5, output_shape_g5) + b_m2_g_conv5)
+
+    return h_g_conv5
 
 #==================== Discriminator ====================
 #Discriminator 1
@@ -395,6 +402,7 @@ D2_solver = tf.train.AdamOptimizer().minimize(D2_loss, var_list=var_d2)
 
 Ss_solver = tf.train.AdamOptimizer().minimize(0.2*Ss_loss, var_list=var_s)
 Gs_solver = tf.train.AdamOptimizer().minimize(0.2*Gs_loss, var_list=var_g1 + var_g2)
+G2s_solver = tf.train.AdamOptimizer().minimize(0.2*Gs_loss, var_list=var_g2)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -458,7 +466,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(100001):
+for it in range(200001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
@@ -479,13 +487,20 @@ for it in range(100001):
 	sf_batch = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
 
 	#Training
-	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
+	if it < 15000:
+		_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
+	else:
+		loss_d1 = 0.
 	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch, x2_:x2_batch})
 	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
 
-	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
+	if it < 15000:
+		_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
+		_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
+	else:
+		loss_g1 = 0.
+		_, loss_gs = sess.run([G2s_solver, G2s_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
 	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch})
-	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
 		
 	#Show result
 	if it%100 == 0:
