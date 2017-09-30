@@ -562,6 +562,8 @@ for it in range(20001):
 
 	z1_batch = sample_z(batch_size*2, z_dim)
 	z2_batch = sample_z(batch_size*2, z_dim)
+	z1_sync_batch = sample_z(batch_size, z_dim)
+	z2_sync_batch = sample_z(batch_size, z_dim)
 
 	c_sync_batch = sample_z(batch_size, c_dim)
 	c1_nsync_batch = sample_z(batch_size, c_dim)
