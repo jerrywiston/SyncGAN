@@ -252,36 +252,30 @@ def Generator1(z, c):
     return h_g_re3
 
 #Generator 2
-W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim+c_dim,7*7*128]))
-b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*128]))
+W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim+c_dim,7*7*64]))
+b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*64]))
 
-W_m2_g_conv2 = tf.Variable(xavier_init([3,3,64,128]))
-b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
+W_m2_g_conv2 = tf.Variable(xavier_init([3,3,32,64]))
+b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[32]))
 
-W_m2_g_conv3 = tf.Variable(xavier_init([3,3,32,64]))
-b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[32]))
+W_m2_g_conv3 = tf.Variable(xavier_init([5,5,1,32]))
+b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[1]))
 
-W_m2_g_conv4 = tf.Variable(xavier_init([5,5,1,32]))
-b_m2_g_conv4 = tf.Variable(tf.zeros(shape=[1]))
-
-var_g2 = [W_m2_g_fc1, b_m2_g_fc1, W_m2_g_conv2, b_m2_g_conv2, W_m2_g_conv3, b_m2_g_conv3, W_m2_g_conv4, b_m2_g_conv4]
+var_g2 = [W_m2_g_fc1, b_m2_g_fc1, W_m2_g_conv2, b_m2_g_conv2, W_m2_g_conv3, b_m2_g_conv3]
 
 def Generator2(z, c):
     z_c = tf.concat(axis=1, values=[z, c])
     h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m2_g_fc1) + b_m2_g_fc1)
-    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 128])
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 64])
 
-    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 64])
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 32])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 14, 14, 32])
-    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3, stride=[1,1,1,1]) + b_m2_g_conv3)
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
 
-    output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
-    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4) + b_m2_g_conv4)
-
-    h_g_re4 = tf.reshape(h_g_conv4, [-1,784])
-    return h_g_re4
+    h_g_re3 = tf.reshape(h_g_conv3, [-1,784])
+    return h_g_re3
 
 #==================== Discriminator ====================
 #Discriminator 1
@@ -446,7 +440,7 @@ mnist_digit = input_data.read_data_sets('MNIST_digit', one_hot=False)
 x_digit = mnist_digit.train.images
 y_digit = mnist_digit.train.labels
 x1_train = class_list(x_digit, y_digit, 10)
-
+'''
 mnist_fashion = input_data.read_data_sets('MNIST_fashion', one_hot=False)
 x_fashion = mnist_fashion.train.images
 y_fashion = mnist_fashion.train.labels
@@ -455,7 +449,7 @@ x2_train = class_list(x_fashion, y_fashion, 10)
 #Rotatate digit (cross domain)
 x_digit_rot = scipy.ndimage.interpolation.rotate(x_digit.reshape(-1, 28, 28), 90, axes=(1, 2)).reshape(-1, 28*28)
 x2_train = class_list(x_digit_rot, y_digit, 10)
-'''
+
 #==================== Main ====================
 if not os.path.exists('out/'):
     os.makedirs('out/')
