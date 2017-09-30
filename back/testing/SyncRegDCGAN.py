@@ -471,13 +471,15 @@ D1_loss = D1_loss_real + D1_loss_fake
 D2_loss = D2_loss_real + D2_loss_fake
 
 #Encoder Loss
-lamda_r = 0.05
+lamda_r = 0.1
 lamda_d = 1.
 
 E1_loss_r = tf.reduce_mean(tf.reduce_sum(tf.square(G1_re - x1_), reduction_indices=[1]))
 E2_loss_r = tf.reduce_mean(tf.reduce_sum(tf.square(G2_re - x2_), reduction_indices=[1]))
 E1_loss_d = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_re_logit, labels=tf.ones_like(D1_re_logit)))
 E2_loss_d = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_re_logit, labels=tf.ones_like(D2_re_logit)))
+E12_loss = tf.reduce_mean(tf.reduce_sum(tf.square(G12_trans - x2_), reduction_indices=[1]))
+E21_loss = tf.reduce_mean(tf.reduce_sum(tf.square(G21_trans - x1_), reduction_indices=[1]))
 
 E1_loss = lamda_r*E1_loss_r + lamda_d*E1_loss_d
 E2_loss = lamda_r*E2_loss_r + lamda_d*E2_loss_d
@@ -487,15 +489,15 @@ Ec_loss = tf.reduce_mean(tf.reduce_sum(tf.square(C1_encode - C2_encode), reducti
 G1_loss_d = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_logit, labels=tf.ones_like(D1_fake_logit)))
 G2_loss_d = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D2_fake_logit, labels=tf.ones_like(D2_fake_logit)))
 
-G1_loss = G1_loss_d + E1_loss
-G2_loss = G2_loss_d + E2_loss
+G1_loss = G1_loss_d + lamda_r*E1_loss_r + lamda_d*E1_loss_d
+G2_loss = G2_loss_d + lamda_r*E2_loss_r + lamda_d*E2_loss_d
 Gc_loss = tf.reduce_mean(tf.reduce_sum(tf.square(C1_re - C2_re), reduction_indices=[1]))
 Gs_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_logit, labels=s_))
 
 #Synchronize Loss
 Ss_real_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_real_logit, labels=s_))
 Ss_fake_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_logit, labels=tf.zeros_like(S_fake_logit)))
-Ss_loss = Ss_real_loss# + Ss_fake_loss
+Ss_loss = Ss_real_loss + Ss_fake_loss
 
 #Solver 
 G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_g1)
@@ -568,15 +570,17 @@ for it in range(20001):
 	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
 	_, loss_gc = sess.run([Gc_solver, Gc_loss], feed_dict={z1_:z1_sync_batch, z2_:z2_sync_batch, c1_:c_sync_batch, c2_:c_sync_batch})
 	
-	_, loss_e1 = sess.run([E1_solver, E1_loss], feed_dict={x1_:x1_sync})
-	_, loss_e2 = sess.run([E2_solver, E2_loss], feed_dict={x2_:x2_sync})
+	_, loss_e1 = sess.run([E1_solver, E1_loss], feed_dict={x1_:x1_sync, z2_:z2_sync_batch})
+	_, loss_e2 = sess.run([E2_solver, E2_loss], feed_dict={x2_:x2_sync, z1_:z1_sync_batch})
 	_, loss_ec = sess.run([Ec_solver, Ec_loss], feed_dict={x1_:x1_sync, x2_:x2_sync})
 
 	#Show result
 	if it%200 == 0:
-		print("Iter: {}\n G1_loss: {:.4}, G2_loss: {:.4}, Gs_loss: {:.4}\n D1_loss: {:.4}, D2_loss: {:.4}, Ss_loss: {:.4}\n"
-				.format(it, loss_g1, loss_g2, loss_d1, loss_d2, loss_ss, loss_gs))
-		
+		print("Iter: {}".format(it))
+		print("  G1_loss: {:.4}, G2_loss: {:.4},".format(loss_g1, loss_g2))	
+		print("  D1_loss: {:.4}, D2_loss: {:.4},".format(loss_d1, loss_d2))
+		print("  Ss_loss: {:.4}, Gs_loss: {:.4}\n".format(loss_ss, loss_gs))
+
 		x_samp = samp_fig_test(sess)
 		plot_x(i,'samp', x_samp, size=(8,8))
 		i += 1

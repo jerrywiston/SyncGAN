@@ -45,15 +45,14 @@ def samp_fig(sess, size):
 
 #==================== Data Batch ====================
 def class_list(imgs, labels, c=10):
-	imgs_list = imgs.tolist()
 	imgs_class_list = []
 	for i in range(c):
 		imgs_class_list.append([])
 	
 	for i in range(labels.shape[0]):
-		imgs_class_list[labels[i]].append(imgs_list[i])
+		imgs_class_list[labels[i]].append(imgs[i])
 
-	return imgs_class_list
+	return np.asarray(imgs_class_list)
 
 def next_batch(imgs, size):
     img_samp = np.ndarray(shape=(size, imgs.shape[1]))
@@ -399,7 +398,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(20001):
+for it in range(40001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
