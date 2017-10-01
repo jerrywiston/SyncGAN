@@ -305,7 +305,7 @@ def Discriminator1(x):
 	y_logit = tf.matmul(h_d_fc3, W_m1_d_fc4) + b_m1_d_fc4
 	y_prob = tf.nn.sigmoid(y_logit)
 	
-	return y_prob, y_logit
+	return y_logit, y_prob
 
 #Discriminator 2
 W_m2_d_conv1 = tf.Variable(xavier_init([5,5,1,4]))
@@ -334,76 +334,47 @@ def Discriminator2(x):
 	y_logit = tf.matmul(h_d_fc3, W_m2_d_fc4) + b_m2_d_fc4
 	y_prob = tf.nn.sigmoid(y_logit)
 	
-	return y_prob, y_logit  
+	return y_logit, y_prob 
 
 #==================== Synchronizer ====================
-#Mode 1
-W_m1_s_conv1 = tf.Variable(xavier_init([5,5,1,16]))
-b_m1_s_conv1 = tf.Variable(tf.zeros(shape=[16]))
-W_m1_s_conv2 = tf.Variable(xavier_init([3,3,16,32]))
-b_m1_s_conv2 = tf.Variable(tf.zeros(shape=[32]))
-W_m1_s_fc3 = tf.Variable(xavier_init([7*7*32, 256]))
-b_m1_s_fc3 = tf.Variable(tf.zeros(shape=[256]))
+W_m1_s1 = tf.Variable(xavier_init([784,256]))
+b_m1_s1 = tf.Variable(tf.zeros(shape=[256]))
+W_m2_s1 = tf.Variable(xavier_init([784,256]))
+b_m2_s1 = tf.Variable(tf.zeros(shape=[256]))
 
-#Mode 2
-W_m2_s_conv1 = tf.Variable(xavier_init([5,5,1,16]))
-b_m2_s_conv1 = tf.Variable(tf.zeros(shape=[16]))
-W_m2_s_conv2 = tf.Variable(xavier_init([3,3,16,32]))
-b_m2_s_conv2 = tf.Variable(tf.zeros(shape=[32]))
-W_m2_s_fc3 = tf.Variable(xavier_init([7*7*32, 256]))
-b_m2_s_fc3 = tf.Variable(tf.zeros(shape=[256]))
+W_s_s2 = tf.Variable(xavier_init([512,256]))
+b_s_s2 = tf.Variable(tf.zeros(shape=[256]))
 
-#Share
-W_s_s4 = tf.Variable(xavier_init([512,256]))
-b_s_s4 = tf.Variable(tf.zeros(shape=[256]))
-W_s_s5 = tf.Variable(xavier_init([256,1]))
-b_s_s5 = tf.Variable(tf.zeros(shape=[1]))
+W_s_s3 = tf.Variable(xavier_init([256,1]))
+b_s_s3 = tf.Variable(tf.zeros(shape=[1]))
 
-var_s = [ W_m1_s_conv1, b_m1_s_conv1, 
-		  W_m1_s_conv2, b_m1_s_conv2,
-		  b_m1_s_fc3, b_m1_s_fc3,
-		  
-		  W_m2_s_conv1, b_m2_s_conv1,
-		  W_m2_s_conv2, b_m2_s_conv2,
-		  b_m2_s_fc3, b_m2_s_fc3,
-
-		  W_s_s4, b_s_s4,
-		  W_s_s5, b_s_s5 ]
+var_s = [ W_m1_s1, b_m1_s1, 
+		  W_m2_s1, b_m2_s1,
+		  W_s_s2, b_s_s2,
+		  W_s_s3, b_s_s3 ]
 
 def Synchronizer(x1, x2):
-	#Mode 1
-	x1_re = tf.reshape(x1, [-1,28,28,1])
-	h_conv1 = tf.nn.relu(conv2d(x1_re, W_m1_s_conv1, [1,2,2,1]) + b_m1_s_conv1)
-	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m1_s_conv2, [1,2,2,1]) + b_m1_s_conv2)
-	h_re2 = tf.reshape(h_conv2, [-1,7*7*32])
-	v1 = tf.nn.relu(tf.matmul(h_re2, W_m1_s_fc3) + b_m1_s_fc3)
+	h_m1_s1 = tf.nn.relu(tf.matmul(x1, W_m1_s1) + b_m1_s1)
+	h_m2_s1 = tf.nn.relu(tf.matmul(x2, W_m2_s1) + b_m2_s1)
 
-	#Mode 2
-	x2_re = tf.reshape(x2, [-1,28,28,1])
-	h_conv1 = tf.nn.relu(conv2d(x2_re, W_m2_s_conv1, [1,2,2,1]) + b_m2_s_conv1)
-	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m2_s_conv2, [1,2,2,1]) + b_m2_s_conv2)
-	h_re2 = tf.reshape(h_conv2, [-1,7*7*32])
-	v2 = tf.nn.relu(tf.matmul(h_re2, W_m2_s_fc3) + b_m2_s_fc3)
-
-	#Shared
-	v = tf.concat(axis=1, values=[v1, v2])
-	h_s4 = tf.nn.relu(tf.matmul(v, W_s_s4) + b_s_s4)
-	s_logit = tf.matmul(h_s4, W_s_s5) + b_s_s5
-	s_prob = tf.nn.sigmoid(s_logit)
-	return s_prob, s_logit
+	h_concat_s1 = tf.concat(axis=1, values=[h_m1_s1, h_m2_s1])
+	h_s2 = tf.nn.relu(tf.matmul(h_concat_s1, W_s_s2) + b_s_s2)
+	y_s_logit = tf.matmul(h_s2, W_s_s3) + b_s_s3
+	y_s_prob = tf.nn.sigmoid(y_s_logit)
+	return y_s_logit, y_s_prob
 
 #==================== Node Connect ====================
 G1_sample = Generator1(z1_, c1_)
 G2_sample = Generator2(z2_, c2_)
 
-D1_real_prob, D1_real_logit = Discriminator1(x1_)
-D1_fake_prob, D1_fake_logit = Discriminator1(G1_sample)
+D1_real_logit, D1_real_prob = Discriminator1(x1_)
+D1_fake_logit, D1_fake_prob = Discriminator1(G1_sample)
 
-D2_real_prob, D2_real_logit = Discriminator2(x2_)
-D2_fake_prob, D2_fake_logit = Discriminator2(G2_sample)
+D2_real_logit, D2_real_prob = Discriminator2(x2_)
+D2_fake_logit, D2_fake_prob = Discriminator2(G2_sample)
 
-S_real_prob, S_real_logit = Synchronizer(x1_, x2_)
-S_fake_prob, S_fake_logit = Synchronizer(G1_sample, G2_sample)
+S_real_logit, S_real_prob = Synchronizer(x1_, x2_)
+S_fake_logit, S_fake_prob = Synchronizer(G1_sample, G2_sample)
 
 #==================== Loss & Train ====================
 #Vanilla GAN Loss
