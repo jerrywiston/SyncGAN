@@ -307,7 +307,7 @@ def Generator2(z):
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
-    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
     h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m2_g_conv4)
@@ -325,7 +325,7 @@ def Generator_p2(k):
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
-    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
     h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m2_g_conv4)

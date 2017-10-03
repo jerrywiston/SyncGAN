@@ -43,6 +43,7 @@ def samp_fig(sess, size):
 
 #==================== Data Batch ====================
 def class_list(imgs, labels, c=10):
+	imgs_class_list = []
 	for i in range(c):
 		imgs_class_list.append([])
 	
@@ -173,7 +174,7 @@ def CompareFig(sess, x1_train, x2_train, z_dim):
 	return x_fig
 
 #==================== Parameter ====================
-batch_size = 64
+batch_size = 128
 z_dim = 64
 
 def xavier_init(size):
@@ -233,7 +234,7 @@ def Generator1(z):
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2) + b_m1_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
-    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
     h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m1_g_conv4)
@@ -267,7 +268,7 @@ def Generator2(z):
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
-    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
     h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m2_g_conv4)
@@ -487,7 +488,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(40001):
+for it in range(20001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
