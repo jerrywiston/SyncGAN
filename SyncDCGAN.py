@@ -33,19 +33,16 @@ def samp_fig(sess, size):
 	x_samp = np.zeros([size[0], size[1], 784], dtype=np.float32)
 
 	for i in range(int(size[0]/2)):
-		z1_batch = sample_z(size[1], z1_dim)
-		z2_batch = sample_z(size[1], z2_dim)
-		c_batch = sample_z(size[1], c_dim)
+		z_batch = sample_z(size[1], z_dim)
 		
-		x_samp[i*2] = sess.run(G1_sample, feed_dict={z1_: z1_batch, c1_: c_batch})
-		x_samp[i*2+1] = sess.run(G2_sample, feed_dict={z2_: z2_batch, c2_: c_batch})
+		x_samp[i*2] = sess.run(G1_sample, feed_dict={z1_: z_batch})
+		x_samp[i*2+1] = sess.run(G2_sample, feed_dict={z2_: z_batch})
 
 	x_samp = x_samp.reshape(size[0]*size[1], 784)
 	return x_samp
 
 #==================== Data Batch ====================
 def class_list(imgs, labels, c=10):
-	imgs_class_list = []
 	for i in range(c):
 		imgs_class_list.append([])
 	
@@ -146,54 +143,38 @@ def sample_z(m, n, type=1):
     	return np.random.normal(0., 1., size=[m, n])
 
 
-def CompareFig(sess, x1_train, x2_train, z1_dim, z2_dim, c_dim):
+def CompareFig(sess, x1_train, x2_train, z_dim):
 	x_fig = np.zeros([64, 784], dtype=np.float32)
 
 	#Random sample
-	c_samp = sample_z(8, c_dim)
-	z1_samp = sample_z(8, z1_dim)
-	z2_samp = sample_z(8, z2_dim)
-	x_fig[0:8] = sess.run(G1_sample, feed_dict={z1_: z1_samp, c1_: c_samp})
-	x_fig[8:16] = sess.run(G2_sample, feed_dict={z2_: z2_samp, c2_: c_samp})
+	z_samp = sample_z(8, z_dim)
+	x_fig[0:8] = sess.run(G1_sample, feed_dict={z1_: z_samp})
+	x_fig[8:16] = sess.run(G2_sample, feed_dict={z2_: z_samp})
 
 	#Encode Latent
 	x1_sync, x2_sync, _ = sync_match_next_batch(x1_train, x2_train, 8, cut=200)
-	z1_re, c1_re = LatentEncode(sess, x1_sync, Info_grad1)
-	z2_re, c2_re = LatentEncode(sess, x2_sync, Info_grad2)
+	z1_re = LatentEncode(sess, x1_sync, Info_grad1)
+	z2_re = LatentEncode(sess, x2_sync, Info_grad2)
 
 	#Reconstruct
-	z1_samp = sample_z(4, z1_dim)
-	x1_re = sess.run(G1_sample, feed_dict={z1_:z1_re[0:4], c1_:c1_re[0:4]})
-	x1_re_diff = sess.run(G1_sample, feed_dict={z1_:z1_samp, c1_:c1_re[4:8]})
-	x21_re = sess.run(G1_sample, feed_dict={z1_:z1_re[0:4], c1_:c2_re[0:4]})
-	x21_re_diff = sess.run(G1_sample, feed_dict={z1_:z1_samp, c1_:c2_re[4:8]})
-
-	z2_samp = sample_z(4, z2_dim)
-	x2_re = sess.run(G2_sample, feed_dict={z2_:z2_re[0:4], c2_:c2_re[0:4]})
-	x2_re_diff = sess.run(G2_sample, feed_dict={z2_:z2_samp, c2_:c2_re[4:8]})
-	x12_re = sess.run(G2_sample, feed_dict={z2_:z2_re[0:4], c2_:c1_re[0:4]})
-	x12_re_diff = sess.run(G2_sample, feed_dict={z2_:z2_samp, c2_:c1_re[4:8]})
+	x1_re = sess.run(G1_sample, feed_dict={z1_:z1_re})
+	x21_re = sess.run(G1_sample, feed_dict={z1_:z2_re})
+	x2_re = sess.run(G2_sample, feed_dict={z2_:z2_re})
+	x12_re = sess.run(G2_sample, feed_dict={z2_:z1_re})
 
 	#Fill data
 	x_fig[16:24] = x1_sync
-	x_fig[24:28] = x1_re
-	x_fig[28:32] = x1_re_diff
-	x_fig[32:36] = x21_re
-	x_fig[36:40] = x21_re_diff
-
+	x_fig[24:32] = x1_re
+	x_fig[32:40] = x21_re
 	x_fig[40:48] = x2_sync
-	x_fig[48:52] = x2_re
-	x_fig[52:56] = x2_re_diff
-	x_fig[56:60] = x12_re
-	x_fig[60:64] = x12_re_diff
+	x_fig[48:56] = x2_re
+	x_fig[56:64] = x12_re
 
 	return x_fig
 
 #==================== Parameter ====================
 batch_size = 64
-z1_dim = 8
-z2_dim = 8
-c_dim = 56
+z_dim = 64
 
 def xavier_init(size):
     if len(size) == 4:
@@ -206,18 +187,19 @@ def xavier_init(size):
     stddev = math.sqrt(3.0 / (n_inputs + n_outputs))
     return tf.truncated_normal(size, stddev=stddev)
 
-def conv2d(x, W, stride):
+def conv2d(x, W, stride, bn=True):
+    if bn:
+        x = tf.layers.batch_normalization(x)
     return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
 
-def deconv2d(x, W, output_shape, stride=[1,2,2,1]):
+def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True):
+    if bn:
+        x = tf.layers.batch_normalization(x)
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #==================== Placeholder ====================
-z1_ = tf.placeholder(tf.float32, shape=[None, z1_dim])
-z2_ = tf.placeholder(tf.float32, shape=[None, z2_dim])
-
-c1_ = tf.placeholder(tf.float32, shape=[None, c_dim])
-c2_ = tf.placeholder(tf.float32, shape=[None, c_dim])
+z1_ = tf.placeholder(tf.float32, shape=[None, z_dim])
+z2_ = tf.placeholder(tf.float32, shape=[None, z_dim])
 
 x1_ = tf.placeholder(tf.float32, shape=[None, 784])
 x2_ = tf.placeholder(tf.float32, shape=[None, 784])
@@ -226,79 +208,95 @@ s_ = tf.placeholder(tf.float32, shape=[None, 1])
 
 #==================== Generator ====================
 #Generator 1
-W_m1_g_fc1 = tf.Variable(xavier_init([z1_dim+c_dim,7*7*128]))
+W_m1_g_fc1 = tf.Variable(xavier_init([z_dim,7*7*128]))
 b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*128]))
 
-W_m1_g_conv2 = tf.Variable(xavier_init([3,3,64,128]))
+W_m1_g_conv2 = tf.Variable(xavier_init([5,5,64,128]))
 b_m1_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
 
-W_m1_g_conv3 = tf.Variable(xavier_init([5,5,1,64]))
-b_m1_g_conv3 = tf.Variable(tf.zeros(shape=[1]))
+W_m1_g_conv3 = tf.Variable(xavier_init([5,5,32,64]))
+b_m1_g_conv3 = tf.Variable(tf.zeros(shape=[32]))
 
-var_g1 = [W_m1_g_fc1, b_m1_g_fc1, W_m1_g_conv2, b_m1_g_conv2, W_m1_g_conv3, b_m1_g_conv3]
+W_m1_g_conv4 = tf.Variable(xavier_init([3,3,1,32]))
+b_m1_g_conv4 = tf.Variable(tf.zeros(shape=[1]))
 
-def Generator1(z, c):
-    z_c = tf.concat(axis=1, values=[z, c])
-    h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m1_g_fc1) + b_m1_g_fc1)
+var_g1 = [W_m1_g_fc1, b_m1_g_fc1, 
+		  W_m1_g_conv2, b_m1_g_conv2, 
+		  W_m1_g_conv3, b_m1_g_conv3, 
+		  W_m1_g_conv4, b_m1_g_conv4]
+
+def Generator1(z):
+    h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m1_g_fc1) + b_m1_g_fc1)
     h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 128])
 
     output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 64])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2) + b_m1_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
     h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
 
-    h_g_re3 = tf.reshape(h_g_conv3, [-1,784])
-    return h_g_re3
+    output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m1_g_conv4)
+
+    h_g_re4 = tf.reshape(h_g_conv4, [-1,784])
+    return h_g_re4
 
 #Generator 2
-W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim+c_dim,7*7*128]))
+W_m2_g_fc1 = tf.Variable(xavier_init([z_dim,7*7*128]))
 b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*128]))
 
-W_m2_g_conv2 = tf.Variable(xavier_init([3,3,64,128]))
+W_m2_g_conv2 = tf.Variable(xavier_init([5,5,64,128]))
 b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
 
-W_m2_g_conv3 = tf.Variable(xavier_init([5,5,1,64]))
-b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[1]))
+W_m2_g_conv3 = tf.Variable(xavier_init([5,5,32,64]))
+b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[32]))
 
-var_g2 = [W_m2_g_fc1, b_m2_g_fc1, W_m2_g_conv2, b_m2_g_conv2, W_m2_g_conv3, b_m2_g_conv3]
+W_m2_g_conv4 = tf.Variable(xavier_init([3,3,1,32]))
+b_m2_g_conv4 = tf.Variable(tf.zeros(shape=[1]))
 
-def Generator2(z, c):
-    z_c = tf.concat(axis=1, values=[z, c])
-    h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m2_g_fc1) + b_m2_g_fc1)
+var_g2 = [W_m2_g_fc1, b_m2_g_fc1, 
+		  W_m2_g_conv2, b_m2_g_conv2, 
+		  W_m2_g_conv3, b_m2_g_conv3,
+		  W_m2_g_conv4, b_m2_g_conv4]
+
+def Generator2(z):
+    h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m2_g_fc1) + b_m2_g_fc1)
     h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 128])
 
     output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 64])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
     h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
 
-    h_g_re3 = tf.reshape(h_g_conv3, [-1,784])
-    return h_g_re3
+    output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m2_g_conv4)
+
+    h_g_re4 = tf.reshape(h_g_conv4, [-1,784])
+    return h_g_re4
 
 #==================== Discriminator ====================
 #Discriminator 1
-W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,4]))
-b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[4]))
+W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,16]))
+b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[16]))
 
-W_m1_d_conv2 = tf.Variable(xavier_init([3,3,4,8]))
-b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[8]))
+W_m1_d_conv2 = tf.Variable(xavier_init([3,3,16,32]))
+b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[32]))
 
-W_m1_d_fc3 = tf.Variable(xavier_init([7*7*8, 64]))
-b_m1_d_fc3 = tf.Variable(tf.zeros(shape=[64]))
+W_m1_d_fc3 = tf.Variable(xavier_init([7*7*32, 256]))
+b_m1_d_fc3 = tf.Variable(tf.zeros(shape=[256]))
 
-W_m1_d_fc4 = tf.Variable(xavier_init([64, 1]))
+W_m1_d_fc4 = tf.Variable(xavier_init([256, 1]))
 b_m1_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
 
 var_d1 = [W_m1_d_conv1, b_m1_d_conv1, W_m1_d_conv2, b_m1_d_conv2, W_m1_d_fc3, b_m1_d_fc3, W_m1_d_fc4, b_m1_d_fc4]
 
 def Discriminator1(x):
 	x_re = tf.reshape(x, [-1,28,28,1])
-	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1]) + b_m1_d_conv1)
+	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1], bn=False) + b_m1_d_conv1)
 
 	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1]) + b_m1_d_conv2)
-	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*8])
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*32])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m1_d_fc3) + b_m1_d_fc3)
 	
@@ -308,26 +306,26 @@ def Discriminator1(x):
 	return y_prob, y_logit
 
 #Discriminator 2
-W_m2_d_conv1 = tf.Variable(xavier_init([5,5,1,4]))
-b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[4]))
+W_m2_d_conv1 = tf.Variable(xavier_init([5,5,1,16]))
+b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[16]))
 
-W_m2_d_conv2 = tf.Variable(xavier_init([3,3,4,8]))
-b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[8]))
+W_m2_d_conv2 = tf.Variable(xavier_init([3,3,16,32]))
+b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[32]))
 
-W_m2_d_fc3 = tf.Variable(xavier_init([7*7*8, 128]))
-b_m2_d_fc3 = tf.Variable(tf.zeros(shape=[128]))
+W_m2_d_fc3 = tf.Variable(xavier_init([7*7*32, 256]))
+b_m2_d_fc3 = tf.Variable(tf.zeros(shape=[256]))
 
-W_m2_d_fc4 = tf.Variable(xavier_init([128, 1]))
+W_m2_d_fc4 = tf.Variable(xavier_init([256, 1]))
 b_m2_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
 
 var_d2 = [W_m2_d_conv1, b_m2_d_conv1, W_m2_d_conv2, b_m2_d_conv2, W_m2_d_fc3, b_m2_d_fc3, W_m2_d_fc4, b_m2_d_fc4]
 
 def Discriminator2(x):
 	x_re = tf.reshape(x, [-1,28,28,1])
-	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m2_d_conv1, [1,2,2,1]) + b_m2_d_conv1)
+	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m2_d_conv1, [1,2,2,1], bn=False) + b_m2_d_conv1)
 
 	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1]) + b_m2_d_conv2)
-	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*8])
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*32])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m2_d_fc3) + b_m2_d_fc3)
 	
@@ -373,14 +371,14 @@ var_s = [ W_m1_s_conv1, b_m1_s_conv1,
 def Synchronizer(x1, x2):
 	#Mode 1
 	x1_re = tf.reshape(x1, [-1,28,28,1])
-	h_conv1 = tf.nn.relu(conv2d(x1_re, W_m1_s_conv1, [1,2,2,1]) + b_m1_s_conv1)
+	h_conv1 = tf.nn.relu(conv2d(x1_re, W_m1_s_conv1, [1,2,2,1], bn=False) + b_m1_s_conv1)
 	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m1_s_conv2, [1,2,2,1]) + b_m1_s_conv2)
 	h_re2 = tf.reshape(h_conv2, [-1,7*7*32])
 	v1 = tf.nn.relu(tf.matmul(h_re2, W_m1_s_fc3) + b_m1_s_fc3)
 
 	#Mode 2
 	x2_re = tf.reshape(x2, [-1,28,28,1])
-	h_conv1 = tf.nn.relu(conv2d(x2_re, W_m2_s_conv1, [1,2,2,1]) + b_m2_s_conv1)
+	h_conv1 = tf.nn.relu(conv2d(x2_re, W_m2_s_conv1, [1,2,2,1], bn=False) + b_m2_s_conv1)
 	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m2_s_conv2, [1,2,2,1]) + b_m2_s_conv2)
 	h_re2 = tf.reshape(h_conv2, [-1,7*7*32])
 	v2 = tf.nn.relu(tf.matmul(h_re2, W_m2_s_fc3) + b_m2_s_fc3)
@@ -393,8 +391,8 @@ def Synchronizer(x1, x2):
 	return s_prob, s_logit
 
 #==================== Node Connect ====================
-G1_sample = Generator1(z1_, c1_)
-G2_sample = Generator2(z2_, c2_)
+G1_sample = Generator1(z1_)
+G2_sample = Generator2(z2_)
 
 D1_real_prob, D1_real_logit = Discriminator1(x1_)
 D1_fake_prob, D1_fake_logit = Discriminator1(G1_sample)
@@ -406,7 +404,6 @@ S_real_prob, S_real_logit = Synchronizer(x1_, x2_)
 S_fake_prob, S_fake_logit = Synchronizer(G1_sample, G2_sample)
 
 #==================== Loss & Train ====================
-'''
 #Vanilla GAN Loss
 D1_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_real_logit, labels=tf.ones_like(D1_real_logit)))
 D1_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D1_fake_logit, labels=tf.zeros_like(D1_fake_logit)))
@@ -425,17 +422,17 @@ D2_loss = -tf.reduce_mean(tf.log(D2_real_prob + eps) + tf.log(1. - D2_fake_prob 
 
 G1_loss = -tf.reduce_mean(tf.log(D1_fake_prob + eps))
 G2_loss = -tf.reduce_mean(tf.log(D2_fake_prob + eps))
-
+'''
 #Synchronize Loss
 Ss_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_real_logit, labels=s_))
 Gs_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_logit, labels=s_))
 
 #Solver 
-G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_g1)
-G2_solver = tf.train.AdamOptimizer().minimize(G2_loss, var_list=var_g2)
+G1_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(G1_loss, var_list=var_g1)
+G2_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(G2_loss, var_list=var_g2)
 
-D1_solver = tf.train.AdamOptimizer().minimize(D1_loss, var_list=var_d1)
-D2_solver = tf.train.AdamOptimizer().minimize(D2_loss, var_list=var_d2)
+D1_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(D1_loss, var_list=var_d1)
+D2_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(D2_loss, var_list=var_d2)
 
 Ss_solver = tf.train.AdamOptimizer().minimize(Ss_loss, var_list=var_s)
 Gs_solver = tf.train.AdamOptimizer().minimize(Gs_loss, var_list=var_g1 + var_g2)
@@ -447,24 +444,20 @@ sess.run(tf.global_variables_initializer())
 Grad1_loss = tf.reduce_mean(tf.reduce_sum(tf.square(G1_sample - x1_), axis = 1))
 Grad2_loss = tf.reduce_mean(tf.reduce_sum(tf.square(G2_sample - x2_), axis = 1))
 
-C1_grad = tf.gradients(Grad1_loss, c1_)
 Z1_grad = tf.gradients(Grad1_loss, z1_)
-C2_grad = tf.gradients(Grad2_loss, c2_)
 Z2_grad = tf.gradients(Grad2_loss, z2_)
 
-Info_grad1 = {'C':c1_, 'Z':z1_, 'X':x1_, 'Cgrad':C1_grad, 'Zgrad':Z1_grad, 'Cdim':c_dim, 'Zdim':z1_dim}
-Info_grad2 = {'C':c2_, 'Z':z2_, 'X':x2_, 'Cgrad':C2_grad, 'Zgrad':Z2_grad, 'Cdim':c_dim, 'Zdim':z2_dim}
+Info_grad1 = {'Z':z1_, 'X':x1_, 'Zgrad':Z1_grad, 'Zdim':z_dim}
+Info_grad2 = {'Z':z2_, 'X':x2_, 'Zgrad':Z2_grad, 'Zdim':z_dim}
 
 def LatentEncode(sess, x, Info, rate=0.1, iter=1500):
     z = sample_z(x.shape[0], Info["Zdim"])
-    c = sample_z(x.shape[0], Info["Cdim"])
     for i in range(iter):
-        z_grad, c_grad = sess.run([Info["Zgrad"], Info["Cgrad"]], feed_dict={Info["Z"]:z, Info["C"]:c, Info["X"]:x})
+        z_grad = sess.run(Info["Zgrad"], feed_dict={Info["Z"]:z, Info["X"]:x})
         z_grad_np = np.asarray(z_grad[0])
-        c_grad_np = np.asarray(c_grad[0])
         z -= rate * z_grad_np
-        c -= rate * c_grad_np
-    return z, c
+
+    return z
 
 #==================== Dataset ====================
 mnist_digit = input_data.read_data_sets('MNIST_digit', one_hot=False)
@@ -474,7 +467,7 @@ x_digit_test = mnist_digit.test.images
 y_digit_test = mnist_digit.test.labels
 x1_train = class_list(x_digit_train, y_digit_train, 10)
 x1_test = class_list(x_digit_test, y_digit_test, 10)
-'''
+
 mnist_fashion = input_data.read_data_sets('MNIST_fashion', one_hot=False)
 x_fashion_train = mnist_fashion.train.images
 y_fashion_train = mnist_fashion.train.labels
@@ -488,7 +481,7 @@ x_digit_train_rot = scipy.ndimage.interpolation.rotate(x_digit_train.reshape(-1,
 x_digit_test_rot = scipy.ndimage.interpolation.rotate(x_digit_test.reshape(-1, 28, 28), 90, axes=(1, 2)).reshape(-1, 28*28)
 x2_train = class_list(x_digit_train_rot, y_digit_train, 10)
 x2_test = class_list(x_digit_test_rot, y_digit_test, 10)
-
+'''
 #==================== Main ====================
 if not os.path.exists('out/'):
     os.makedirs('out/')
@@ -503,25 +496,22 @@ for it in range(40001):
 	x2_batch = np.concatenate((x2_sync, x2_nsync), axis=0)
 	sr_batch = np.concatenate((s_sync, s_nsync), axis=0)
 
-	z1_batch = sample_z(batch_size*2, z1_dim)
-	z2_batch = sample_z(batch_size*2, z2_dim)
+	z_sync_batch = sample_z(batch_size, z_dim)
+	z1_nsync_batch = sample_z(batch_size, z_dim)
+	z2_nsync_batch = sample_z(batch_size, z_dim)
 
-	c_sync_batch = sample_z(batch_size, c_dim)
-	c1_nsync_batch = sample_z(batch_size, c_dim)
-	c2_nsync_batch = sample_z(batch_size, c_dim)
-
-	c1_batch = np.concatenate((c_sync_batch, c1_nsync_batch), axis=0)
-	c2_batch = np.concatenate((c_sync_batch, c2_nsync_batch), axis=0)
+	z1_batch = np.concatenate((z_sync_batch, z1_nsync_batch), axis=0)
+	z2_batch = np.concatenate((z_sync_batch, z2_nsync_batch), axis=0)
 	sf_batch = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
 	
 	#Training
-	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
-	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch, x2_:x2_batch})
+	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, x1_:x1_batch})
+	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, x2_:x2_batch})
 	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
 
-	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
-	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch})
-	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
+	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch})
+	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch})
+	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, s_:sf_batch})
 		
 	#Show result
 	if it%100 == 0:
@@ -542,5 +532,5 @@ x_samp = samp_fig(sess, size)
 plot_x(0,'result', x_samp, size)
 
 for i in range(4):
-	x_fig = CompareFig(sess, x1_test, x2_test, z1_dim, z2_dim, c_dim)
+	x_fig = CompareFig(sess, x1_test, x2_test, z_dim)
 	plot_x(0,'reconst_'+str(i), x_fig, (8,8))
