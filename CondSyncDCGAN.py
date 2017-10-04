@@ -158,12 +158,12 @@ def xavier_init(size):
 
 def conv2d(x, W, stride, bn=True):
     if bn:
-        x = tf.layers.batch_normalization(x, training=true)
+        x = tf.layers.batch_normalization(x, training=True)
     return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
 
 def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True):
     if bn:
-        x = tf.layers.batch_normalization(x, training=true)
+        x = tf.layers.batch_normalization(x, training=True)
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #==================== Placeholder ====================
@@ -180,7 +180,7 @@ W_g_conv2 = tf.Variable(xavier_init([5,5,32,64]))
 b_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
 
 W_g_fc3 = tf.Variable(xavier_init([7*7*64, 7*7*64]))
-b_g_fc4 = tf.Variable(tf.zeros(shape=[7*7*64]))
+b_g_fc3 = tf.Variable(tf.zeros(shape=[7*7*64]))
 
 W_g_dconv4 = tf.Variable(xavier_init([5,5,32,64]))
 b_g_dconv4 = tf.Variable(tf.zeros(shape=[32]))
@@ -199,12 +199,12 @@ def Generator(x):
 	h_g_conv1 = tf.nn.relu(conv2d(x_re, W_g_conv1, [1,2,2,1], bn=False) + b_g_conv1)
 	h_g_conv2 = tf.nn.relu(conv2d(h_g_conv1, W_g_conv2, [1,2,2,1]) + b_g_conv2)
 	
-	h_g_re2 = tf.reshape(h_g_conv2, [7*7*64])
-	h_g_re2 = tf.layers.batch_normalization(h_re2, training=true)
+	h_g_re2 = tf.reshape(h_g_conv2, [-1,7*7*64])
+	h_g_re2 = tf.layers.batch_normalization(h_g_re2, training=True)
 	h_g_fc3 = tf.nn.relu(tf.matmul(h_g_re2, W_g_fc3) + b_g_fc3)
-	h_g_re3 = tf.reshape(h_g_fc3, [7*7*64])
+	h_g_re3 = tf.reshape(h_g_fc3, [-1,7,7,64])
 
-	output_shape_g4 = tf.stack([tf.shape(x)[0], 14, 14, 64])
+	output_shape_g4 = tf.stack([tf.shape(x)[0], 14, 14, 32])
 	h_g_dconv4 = tf.nn.relu(deconv2d(h_g_re3, W_g_dconv4, output_shape_g4) + b_g_dconv4)
 	output_shape_g5 = tf.stack([tf.shape(x)[0], 28, 28, 1])
 	h_g_dconv5 = tf.nn.sigmoid(deconv2d(h_g_dconv4, W_g_dconv5, output_shape_g5) + b_g_dconv5)
@@ -325,10 +325,10 @@ Gs_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_l
 
 #Solver 
 G_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(G_loss, var_list=var_g)
-D_solver = tf.train.AdamOptimizer(1e-4, beta1=0.5).minimize(D_loss, var_list=var_d)
+D_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(D_loss, var_list=var_d)
 
 Gs_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(Gs_loss, var_list=var_g)
-Ss_solver = tf.train.AdamOptimizer(1e-4, beta1=0.5).minimize(Ss_loss, var_list=var_s)
+Ss_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(Ss_loss, var_list=var_s)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -361,7 +361,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(40001):
+for it in range(20001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
