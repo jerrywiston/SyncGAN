@@ -119,12 +119,12 @@ var_g = [W_g_fc1, b_g_fc1,
 
 def conv2d(x, W, stride, bn=True):
     if bn:
-        x = tf.layers.batch_normalization(x)
+        x = tf.layers.batch_normalization(x, training=True)
     return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
 
 def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True):
     if bn:
-        x = tf.layers.batch_normalization(x)
+        x = tf.layers.batch_normalization(x, training=True)
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 def Generator(z):
