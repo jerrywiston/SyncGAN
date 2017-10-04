@@ -174,7 +174,7 @@ def CompareFig(sess, x1_train, x2_train, z_dim):
 	return x_fig
 
 #==================== Parameter ====================
-batch_size = 128
+batch_size = 64
 z_dim = 64
 
 def xavier_init(size):
@@ -278,26 +278,29 @@ def Generator2(z):
 
 #==================== Discriminator ====================
 #Discriminator 1
-W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,16]))
-b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[16]))
+W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,8]))
+b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
 
-W_m1_d_conv2 = tf.Variable(xavier_init([3,3,16,32]))
-b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[32]))
+W_m1_d_conv2 = tf.Variable(xavier_init([3,3,8,16]))
+b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
-W_m1_d_fc3 = tf.Variable(xavier_init([7*7*32, 256]))
-b_m1_d_fc3 = tf.Variable(tf.zeros(shape=[256]))
+W_m1_d_fc3 = tf.Variable(xavier_init([7*7*16, 128]))
+b_m1_d_fc3 = tf.Variable(tf.zeros(shape=[128]))
 
-W_m1_d_fc4 = tf.Variable(xavier_init([256, 1]))
+W_m1_d_fc4 = tf.Variable(xavier_init([128, 1]))
 b_m1_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
 
-var_d1 = [W_m1_d_conv1, b_m1_d_conv1, W_m1_d_conv2, b_m1_d_conv2, W_m1_d_fc3, b_m1_d_fc3, W_m1_d_fc4, b_m1_d_fc4]
+var_d1 = [W_m1_d_conv1, b_m1_d_conv1, 
+		  W_m1_d_conv2, b_m1_d_conv2, 
+		  W_m1_d_fc3, b_m1_d_fc3, 
+		  W_m1_d_fc4, b_m1_d_fc4]
 
 def Discriminator1(x):
 	x_re = tf.reshape(x, [-1,28,28,1])
 	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1], bn=False) + b_m1_d_conv1)
 
 	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1]) + b_m1_d_conv2)
-	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*32])
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m1_d_fc3) + b_m1_d_fc3)
 	
@@ -307,26 +310,29 @@ def Discriminator1(x):
 	return y_prob, y_logit
 
 #Discriminator 2
-W_m2_d_conv1 = tf.Variable(xavier_init([5,5,1,16]))
-b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[16]))
+W_m2_d_conv1 = tf.Variable(xavier_init([5,5,1,8]))
+b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
 
-W_m2_d_conv2 = tf.Variable(xavier_init([3,3,16,32]))
-b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[32]))
+W_m2_d_conv2 = tf.Variable(xavier_init([3,3,8,16]))
+b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
-W_m2_d_fc3 = tf.Variable(xavier_init([7*7*32, 256]))
-b_m2_d_fc3 = tf.Variable(tf.zeros(shape=[256]))
+W_m2_d_fc3 = tf.Variable(xavier_init([7*7*16, 128]))
+b_m2_d_fc3 = tf.Variable(tf.zeros(shape=[128]))
 
-W_m2_d_fc4 = tf.Variable(xavier_init([256, 1]))
+W_m2_d_fc4 = tf.Variable(xavier_init([128, 1]))
 b_m2_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
 
-var_d2 = [W_m2_d_conv1, b_m2_d_conv1, W_m2_d_conv2, b_m2_d_conv2, W_m2_d_fc3, b_m2_d_fc3, W_m2_d_fc4, b_m2_d_fc4]
+var_d2 = [W_m2_d_conv1, b_m2_d_conv1, 
+		  W_m2_d_conv2, b_m2_d_conv2, 
+		  W_m2_d_fc3, b_m2_d_fc3, 
+		  W_m2_d_fc4, b_m2_d_fc4]
 
 def Discriminator2(x):
 	x_re = tf.reshape(x, [-1,28,28,1])
 	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m2_d_conv1, [1,2,2,1], bn=False) + b_m2_d_conv1)
 
 	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1]) + b_m2_d_conv2)
-	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*32])
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m2_d_fc3) + b_m2_d_fc3)
 	
@@ -488,7 +494,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(20001):
+for it in range(40001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
@@ -509,7 +515,7 @@ for it in range(20001):
 	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, x1_:x1_batch})
 	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, x2_:x2_batch})
 	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
-
+	
 	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch})
 	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch})
 	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, s_:sf_batch})
