@@ -8,7 +8,7 @@ import random
 import math
 
 def plot(samples):
-    sample = (samples + 1.) / 2.
+    samples = (samples + 1.)/2
     fig = plt.figure(figsize=(4, 4))
     gs = gridspec.GridSpec(4, 4)
     gs.update(wspace=0.05, hspace=0.05)
@@ -55,8 +55,8 @@ def cifar_read(file):
 
 def cifar_data_extract(dict):
     imgs_raw = dict[b'data'].astype("uint8")
-    imgs = np.array(imgs_raw, dtype=float) / 255.0  
-    imgs = imgs * 2. - 1. 
+    imgs = np.array(imgs_raw, dtype=float) / 255.0 
+    imgs = imgs*2 - 1.  
     imgs = imgs.reshape([-1, 3, 32, 32]).transpose([0, 2, 3, 1])
     labels = labels_one_hot(dict[b'labels'], 10)
     return imgs, labels
