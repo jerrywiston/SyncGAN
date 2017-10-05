@@ -29,7 +29,7 @@ def plot_x(id, type, samp, size=(4,4)):
     plt.savefig('out/{}_{}.png'.format(str(id).zfill(4), type), bbox_inches='tight')
     plt.close(fig)
 
-def samp_fig(sess, size):
+def samp_fig(sess, size, x1_train, x2_train):
 	x_samp = np.zeros([size[0], size[1], 784], dtype=np.float32)
 
 	for i in range(int(size[0]/2)):
@@ -214,16 +214,16 @@ def Generator(x):
 
 #==================== Discriminator ====================
 #Discriminator
-W_d_conv1 = tf.Variable(xavier_init([5,5,1,8]))
-b_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
+W_d_conv1 = tf.Variable(xavier_init([5,5,1,16]))
+b_d_conv1 = tf.Variable(tf.zeros(shape=[16]))
 
-W_d_conv2 = tf.Variable(xavier_init([3,3,8,16]))
-b_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
+W_d_conv2 = tf.Variable(xavier_init([3,3,16,32]))
+b_d_conv2 = tf.Variable(tf.zeros(shape=[32]))
 
-W_d_fc3 = tf.Variable(xavier_init([7*7*16, 128]))
-b_d_fc3 = tf.Variable(tf.zeros(shape=[128]))
+W_d_fc3 = tf.Variable(xavier_init([7*7*32, 256]))
+b_d_fc3 = tf.Variable(tf.zeros(shape=[256]))
 
-W_d_fc4 = tf.Variable(xavier_init([128, 1]))
+W_d_fc4 = tf.Variable(xavier_init([256, 1]))
 b_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
 
 var_d = [W_d_conv1, b_d_conv1, 
@@ -236,7 +236,7 @@ def Discriminator(x):
 	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_d_conv1, [1,2,2,1], bn=False) + b_d_conv1)
 
 	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_d_conv2, [1,2,2,1]) + b_d_conv2)
-	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*32])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_d_fc3) + b_d_fc3)
 	
@@ -323,12 +323,17 @@ Ss_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_f
 Ss_loss = Ss_loss_real + Ss_loss_fake
 Gs_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_logit, labels=tf.ones_like(S_fake_logit)))
 
+#Reconstruct Loss
+#R_loss = tf.reduce_mean(tf.reduce_sum(tf.abs(G_sample - x2_), reduction_indices=[1]))
+R_loss = tf.reduce_mean(tf.reduce_sum(tf.square(G_sample - x2_), reduction_indices=[1]))
+R_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(R_loss, var_list=var_g)
+
 #Solver 
 G_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(G_loss, var_list=var_g)
 D_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(D_loss, var_list=var_d)
 
 Gs_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(Gs_loss, var_list=var_g)
-Ss_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(Ss_loss, var_list=var_s)
+Ss_solver = tf.train.AdamOptimizer(1e-4, beta1=0.5).minimize(Ss_loss, var_list=var_s) #fashion:2e-4, 90-degree:1e-4
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -361,7 +366,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(20001):
+for it in range(40001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
@@ -376,20 +381,16 @@ for it in range(20001):
 	
 	_, loss_g = sess.run([G_solver, G_loss], feed_dict={x1_:x1_batch})
 	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={x1_:x1_batch})
+
+	#_, loss_r = sess.run([R_solver, R_loss], feed_dict={x1_:x1_sync, x2_:x2_sync})
 		
 	#Show result
 	if it%100 == 0:
 		print("Iter: {}".format(it))
-		print("  G_loss : {:.4f}, D_loss : {:.4f}".format(loss_g, loss_d))	
+		#print("  G_loss : {:.4f}, D_loss : {:.4f}".format(loss_g, loss_d))	
 		print("  Gs_loss: {:.4f}, Ss_loss: {:.4f}".format(loss_gs, loss_ss))
 		print()
 		
-		x_samp = samp_fig(sess, (6,6))
+		x_samp = samp_fig(sess, (6,6), x1_train, x2_train)
 		plot_x(i,'samp', x_samp, (6,6))
 		i+=1
-
-#Draw result figure
-print("Save result figure ...")
-size = (16,16)
-x_samp = samp_fig(sess, size)
-plot_x(0,'result', x_samp, size)

@@ -10,6 +10,7 @@ import scipy.ndimage.interpolation
 
 #==================== Draw Figure ====================
 def plot(samples, size, re_size=(32,32,3), gray=False):
+    samples = (samples + 1.)/2.
     fig = plt.figure(figsize=size)
     gs = gridspec.GridSpec(size[0], size[1])
     gs.update(wspace=0.05, hspace=0.05)
@@ -159,10 +160,14 @@ def xavier_init(size):
     stddev = math.sqrt(3.0 / (n_inputs + n_outputs))
     return tf.truncated_normal(size, stddev=stddev)
 
-def conv2d(x, W, stride):
+def conv2d(x, W, stride, bn=True):
+    if bn:
+        x = tf.layers.batch_normalization(x, training=True)
     return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
 
-def deconv2d(x, W, output_shape, stride=[1,2,2,1]):
+def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True):
+    if bn:
+        x = tf.layers.batch_normalization(x, training=True)
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #==================== Placeholder ====================
@@ -179,124 +184,153 @@ s_ = tf.placeholder(tf.float32, shape=[None, 1])
 
 #==================== Generator ====================
 #Generator 1
-W_m1_g_fc1 = tf.Variable(xavier_init([z1_dim+c_dim,7*7*64]))
-b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*64]))
+W_m1_g_fc1 = tf.Variable(xavier_init([z1_dim,7*7*128]))
+b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*128]))
 
-W_m1_g_conv2 = tf.Variable(xavier_init([3,3,32,64]))
-b_m1_g_conv2 = tf.Variable(tf.zeros(shape=[32]))
+W_m1_g_conv2 = tf.Variable(xavier_init([5,5,64,128]))
+b_m1_g_conv2 = tf.Variable(tf.zeros(shape=[64]))
 
-W_m1_g_conv3 = tf.Variable(xavier_init([5,5,1,32]))
-b_m1_g_conv3 = tf.Variable(tf.zeros(shape=[1]))
+W_m1_g_conv3 = tf.Variable(xavier_init([5,5,32,64]))
+b_m1_g_conv3 = tf.Variable(tf.zeros(shape=[32]))
 
-var_g1 = [W_m1_g_fc1, b_m1_g_fc1, W_m1_g_conv2, b_m1_g_conv2, W_m1_g_conv3, b_m1_g_conv3]
+W_m1_g_conv4 = tf.Variable(xavier_init([3,3,1,32]))
+b_m1_g_conv4 = tf.Variable(tf.zeros(shape=[1]))
 
-def Generator1(z, c):
-    z_c = tf.concat(axis=1, values=[z, c])
-    h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m1_g_fc1) + b_m1_g_fc1)
-    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 64])
+var_g1 = [W_m1_g_fc1, b_m1_g_fc1, 
+		  W_m1_g_conv2, b_m1_g_conv2, 
+		  W_m1_g_conv3, b_m1_g_conv3, 
+		  W_m1_g_conv4, b_m1_g_conv4]
 
-    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 32])
+def Generator1(z):
+    h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m1_g_fc1) + b_m1_g_fc1)
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 128])
+
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 64])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2) + b_m1_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 1])
-    h_g_conv3 = tf.nn.sigmoid(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
 
-    h_g_re3 = tf.reshape(h_g_conv3, [-1,784])
-    return h_g_re3
+    output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
+    h_g_conv4 = tf.nn.tanh(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m1_g_conv4)
+
+    h_g_re4 = tf.reshape(h_g_conv4, [-1,784])
+    return h_g_re4
 
 #Generator 2
-W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim+c_dim,8*8*256]))
-b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[8*8*256]))
+W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim,2*2*1024]))
+b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[2*2*1024]))
 
-W_m2_g_conv2 = tf.Variable(xavier_init([3,3,128,256]))
-b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[128]))
+W_m2_g_conv2 = tf.Variable(xavier_init([5,5,512,1024]))
+b_m2_g_conv2 = tf.Variable(tf.zeros(shape=[512]))
 
-W_m2_g_conv3 = tf.Variable(xavier_init([3,3,64,128]))
-b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[64]))
+W_m2_g_conv3 = tf.Variable(xavier_init([5,5,256,512]))
+b_m2_g_conv3 = tf.Variable(tf.zeros(shape=[256]))
 
-W_m2_g_conv4 = tf.Variable(xavier_init([5,5,3,64]))
-b_m2_g_conv4 = tf.Variable(tf.zeros(shape=[3]))
+W_m2_g_conv4 = tf.Variable(xavier_init([5,5,128,256]))
+b_m2_g_conv4 = tf.Variable(tf.zeros(shape=[128]))
+
+W_m2_g_conv5 = tf.Variable(xavier_init([5,5,64,128]))
+b_m2_g_conv5 = tf.Variable(tf.zeros(shape=[64]))
+
+W_m2_g_conv6 = tf.Variable(xavier_init([3,3,3,64]))
+b_m2_g_conv6 = tf.Variable(tf.zeros(shape=[3]))
 
 var_g2 = [W_m2_g_fc1, b_m2_g_fc1, 
-		 W_m2_g_conv2, b_m2_g_conv2, 
-		 W_m2_g_conv3, b_m2_g_conv3, 
-		 W_m2_g_conv4, b_m2_g_conv4]
+         W_m2_g_conv2, b_m2_g_conv2, 
+         W_m2_g_conv3, b_m2_g_conv3, 
+         W_m2_g_conv4, b_m2_g_conv4, 
+         W_m2_g_conv5, b_m2_g_conv5, 
+         W_m2_g_conv6, b_m2_g_conv6]
 
-def Generator2(z, c):
-    z_c = tf.concat(axis=1, values=[z, c])
-    h_g_fc1 = tf.nn.relu(tf.matmul(z_c, W_m2_g_fc1) + b_m2_g_fc1)
-    h_g_re1 = tf.reshape(h_g_fc1, [-1, 8, 8, 256])
+def Generator2(z):
+    h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m2_g_fc1) + b_m2_g_fc1)
+    h_g_re1 = tf.reshape(h_g_fc1, [-1, 2, 2, 1024])
 
-    output_shape_g2 = tf.stack([tf.shape(z)[0], 16, 16, 128])
+    output_shape_g2 = tf.stack([tf.shape(z)[0], 4, 4, 512])
     h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
 
-    output_shape_g3 = tf.stack([tf.shape(z)[0], 16, 16, 64])
-    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3, stride=[1,1,1,1]) + b_m2_g_conv3)
+    output_shape_g3 = tf.stack([tf.shape(z)[0], 8, 8, 256])
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
 
-    output_shape_g4 = tf.stack([tf.shape(z)[0], 32, 32, 3])
-    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4) + b_m2_g_conv4)
+    output_shape_g4 = tf.stack([tf.shape(z)[0], 16, 16, 128])
+    h_g_conv4 = tf.nn.relu(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4) + b_m2_g_conv4)
 
-    return h_g_conv4
+    output_shape_g5 = tf.stack([tf.shape(z)[0], 32, 32, 64])
+    h_g_conv5 = tf.nn.relu(deconv2d(h_g_conv4, W_m2_g_conv5, output_shape_g5) + b_m2_g_conv5)
+
+    output_shape_g6 = tf.stack([tf.shape(z)[0], 32, 32, 3])
+    h_g_conv6 = tf.nn.tanh(deconv2d(h_g_conv5, W_m2_g_conv6, output_shape_g6, stride=[1,1,1,1]) + b_m2_g_conv6)
+
+    return h_g_conv6
 
 #==================== Discriminator ====================
 #Discriminator 1
-W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,4]))
-b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[4]))
+W_m1_d_conv1 = tf.Variable(xavier_init([5,5,1,8]))
+b_m1_d_conv1 = tf.Variable(tf.zeros(shape=[8]))
 
-W_m1_d_conv2 = tf.Variable(xavier_init([3,3,4,8]))
-b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[8]))
+W_m1_d_conv2 = tf.Variable(xavier_init([3,3,8,16]))
+b_m1_d_conv2 = tf.Variable(tf.zeros(shape=[16]))
 
-W_m1_d_fc3 = tf.Variable(xavier_init([7*7*8, 64]))
-b_m1_d_fc3 = tf.Variable(tf.zeros(shape=[64]))
+W_m1_d_fc3 = tf.Variable(xavier_init([7*7*16, 128]))
+b_m1_d_fc3 = tf.Variable(tf.zeros(shape=[128]))
 
-W_m1_d_fc4 = tf.Variable(xavier_init([64, 1]))
+W_m1_d_fc4 = tf.Variable(xavier_init([128, 1]))
 b_m1_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
 
-var_d1 = [W_m1_d_conv1, b_m1_d_conv1, W_m1_d_conv2, b_m1_d_conv2, W_m1_d_fc3, b_m1_d_fc3, W_m1_d_fc4, b_m1_d_fc4]
+var_d1 = [W_m1_d_conv1, b_m1_d_conv1, 
+		  W_m1_d_conv2, b_m1_d_conv2, 
+		  W_m1_d_fc3, b_m1_d_fc3, 
+		  W_m1_d_fc4, b_m1_d_fc4]
 
 def Discriminator1(x):
 	x_re = tf.reshape(x, [-1,28,28,1])
-	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1]) + b_m1_d_conv1)
+	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1], bn=False) + b_m1_d_conv1)
 
 	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1]) + b_m1_d_conv2)
-	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*8])
+	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m1_d_fc3) + b_m1_d_fc3)
 	
 	y_logit = tf.matmul(h_d_fc3, W_m1_d_fc4) + b_m1_d_fc4
 	y_prob = tf.nn.sigmoid(y_logit)
 	
-	return y_logit, y_prob
+	return y_prob, y_logit
 
 #Discriminator 2
-W_m2_d_conv1 = tf.Variable(xavier_init([5,5,3,32]))
-b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[32]))
+W_m2_d_conv1 = tf.Variable(xavier_init([5,5,3,128]))
+b_m2_d_conv1 = tf.Variable(tf.zeros(shape=[128]))
 
-W_m2_d_conv2 = tf.Variable(xavier_init([3,3,32,64]))
-b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[64]))
+W_m2_d_conv2 = tf.Variable(xavier_init([5,5,128,256]))
+b_m2_d_conv2 = tf.Variable(tf.zeros(shape=[256]))
 
-W_m2_d_fc3 = tf.Variable(xavier_init([8*8*64, 256]))
-b_m2_d_fc3 = tf.Variable(tf.zeros(shape=[256]))
+W_m2_d_conv3 = tf.Variable(xavier_init([5,5,256,512]))
+b_m2_d_conv3 = tf.Variable(tf.zeros(shape=[512]))
 
-W_m2_d_fc4 = tf.Variable(xavier_init([256, 1]))
-b_m2_d_fc4 = tf.Variable(tf.zeros(shape=[1]))
+W_m2_d_conv4 = tf.Variable(xavier_init([5,5,512,1024]))
+b_m2_d_conv4 = tf.Variable(tf.zeros(shape=[1024]))
+
+W_m2_d_fc5 = tf.Variable(xavier_init([1024,1]))
+b_m2_d_fc5 = tf.Variable(tf.zeros(shape=[1]))
 
 var_d2 = [W_m2_d_conv1, b_m2_d_conv1, 
-		 W_m2_d_conv2, b_m2_d_conv2, 
-		 W_m2_d_fc3, b_m2_d_fc3, 
-		 W_m2_d_fc4, b_m2_d_fc4]
+          W_m2_d_conv2, b_m2_d_conv2, 
+          W_m2_d_conv3, b_m2_d_conv3, 
+          W_m2_d_conv4, b_m2_d_conv4, 
+          W_m2_d_fc5, b_m2_d_fc5]
 
 def Discriminator2(x):
-    h_d_conv1 = tf.nn.relu(conv2d(x, W_m2_d_conv1, [1,2,2,1]) + b_m2_d_conv1)
+    h_d_conv1 = tf.nn.relu(conv2d(x, W_m2_d_conv1, [1,2,2,1], bn=False) + b_m2_d_conv1)
     h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1]) + b_m2_d_conv2)
+    h_d_conv3 = tf.nn.relu(conv2d(h_d_conv2, W_m2_d_conv3, [1,2,2,1]) + b_m2_d_conv3)
+    h_d_conv4 = tf.nn.relu(conv2d(h_d_conv3, W_m2_d_conv4, [1,2,2,1]) + b_m2_d_conv4)
 
-    h_d_re2 = tf.reshape(h_d_conv2, [-1,8*8*64])
-    h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m2_d_fc3) + b_m2_d_fc3)
+    avg_pool = tf.reduce_mean(h_d_conv4, [1, 2])
 
-    y_logit = tf.matmul(h_d_fc3, W_m2_d_fc4) + b_m2_d_fc4
+    y_logit = tf.matmul(avg_pool, W_m2_d_fc5) + b_m2_d_fc5
     y_prob = tf.nn.sigmoid(y_logit)
 
-    return y_logit, y_prob
+    return y_prob, y_logit
 
 #==================== Synchronizer ====================
 #Mode 1
@@ -316,50 +350,54 @@ W_m2_s_fc3 = tf.Variable(xavier_init([8*8*32, 256]))
 b_m2_s_fc3 = tf.Variable(tf.zeros(shape=[256]))
 
 #Shared
-W_s_s2 = tf.Variable(xavier_init([512,256]))
-b_s_s2 = tf.Variable(tf.zeros(shape=[256]))
-W_s_s3 = tf.Variable(xavier_init([256,1]))
-b_s_s3 = tf.Variable(tf.zeros(shape=[1]))
+W_s_s4 = tf.Variable(xavier_init([512,256]))
+b_s_s4 = tf.Variable(tf.zeros(shape=[256]))
+W_s_s5 = tf.Variable(xavier_init([256,1]))
+b_s_s5 = tf.Variable(tf.zeros(shape=[1]))
 
-var_s = [ W_m1_s1, b_m1_s1, 
-		  W_m2_s_conv1, b_m2_s_conv1, 
-		  W_m2_s_conv2, b_m2_s_conv2, 
-		  W_m2_s_fc3, b_m2_s_fc3,
-		  W_s_s2, b_s_s2,
-		  W_s_s3, b_s_s3 ]
+var_s = [ W_m1_s_conv1, b_m1_s_conv1, 
+		  W_m1_s_conv2, b_m1_s_conv2,
+		  b_m1_s_fc3, b_m1_s_fc3,
+		  
+		  W_m2_s_conv1, b_m2_s_conv1,
+		  W_m2_s_conv2, b_m2_s_conv2,
+		  b_m2_s_fc3, b_m2_s_fc3,
+
+		  W_s_s4, b_s_s4,
+		  W_s_s5, b_s_s5 ]
 
 def Synchronizer(x1, x2):
-    #Mode 1
+	#Mode 1
 	x1_re = tf.reshape(x1, [-1,28,28,1])
-	h_conv1 = tf.nn.relu(conv2d(x1_re, W_m1_s_conv1, [1,2,2,1]) + b_m1_s_conv1)
+	h_conv1 = tf.nn.relu(conv2d(x1_re, W_m1_s_conv1, [1,2,2,1], bn=False) + b_m1_s_conv1)
 	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m1_s_conv2, [1,2,2,1]) + b_m1_s_conv2)
 	h_re2 = tf.reshape(h_conv2, [-1,7*7*32])
 	v1 = tf.nn.relu(tf.matmul(h_re2, W_m1_s_fc3) + b_m1_s_fc3)
 
-    #Modal 2
-    h_m2_s_conv1 = tf.nn.relu(conv2d(x2, W_m2_s_conv1, [1,2,2,1]) + b_m2_s_conv1)
-    h_m2_s_conv2 = tf.nn.relu(conv2d(h_m2_s_conv1, W_m2_s_conv2, [1,2,2,1]) + b_m2_s_conv2)
-    h_m2_s_re2 = tf.reshape(h_m2_s_conv2, [-1,8*8*32])
-    v2 = tf.nn.relu(tf.matmul(h_m2_s_re2, W_m2_s_fc3) + b_m2_s_fc3)
+	#Modal 2
+	h_m2_s_conv1 = tf.nn.relu(conv2d(x2, W_m2_s_conv1, [1,2,2,1]) + b_m2_s_conv1)
+	h_m2_s_conv2 = tf.nn.relu(conv2d(h_m2_s_conv1, W_m2_s_conv2, [1,2,2,1]) + b_m2_s_conv2)
+	h_m2_s_re2 = tf.reshape(h_m2_s_conv2, [-1,8*8*32])
+	v2 = tf.nn.relu(tf.matmul(h_m2_s_re2, W_m2_s_fc3) + b_m2_s_fc3)
 
-    #Shared
+	#Shared
 	v = tf.concat(axis=1, values=[v1, v2])
 	h_s4 = tf.nn.relu(tf.matmul(v, W_s_s4) + b_s_s4)
 	s_logit = tf.matmul(h_s4, W_s_s5) + b_s_s5
 	s_prob = tf.nn.sigmoid(s_logit)
 	return s_prob, s_logit
 
-G1_sample = Generator1(z1_, c1_)
-G2_sample = Generator2(z2_, c2_)
+G1_sample = Generator1(z1_)
+G2_sample = Generator2(z2_)
 
-D1_real_logit, D1_real_prob = Discriminator1(x1_)
-D1_fake_logit, D1_fake_prob = Discriminator1(G1_sample)
+D1_real_prob, D1_real_logit = Discriminator1(x1_)
+D1_fake_prob, D1_fake_logit = Discriminator1(G1_sample)
 
-D2_real_logit, D2_real_prob = Discriminator2(x2_)
-D2_fake_logit, D2_fake_prob = Discriminator2(G2_sample)
+D2_real_prob, D2_real_logit = Discriminator2(x2_)
+D2_fake_prob, D2_fake_logit = Discriminator2(G2_sample)
 
-S_real_logit, S_real_prob = Synchronizer(x1_, x2_)
-S_fake_logit, S_fake_prob = Synchronizer(G1_sample, G2_sample)
+S_real_prob, S_real_logit = Synchronizer(x1_, x2_)
+S_fake_prob, S_fake_logit = Synchronizer(G1_sample, G2_sample)
 
 #==================== Loss & Train ====================
 #Vanilla GAN Loss
@@ -379,15 +417,14 @@ Ss_fake_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_f
 Gs_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_fake_logit, labels=s_))
 
 #Solver 
-G1_solver = tf.train.AdamOptimizer().minimize(G1_loss, var_list=var_g1)
-G2_solver = tf.train.AdamOptimizer().minimize(G2_loss, var_list=var_g2)
+G1_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(G1_loss, var_list=var_g1)
+G2_solver = tf.train.AdamOptimizer(1e-3, beta1=0.5).minimize(G2_loss, var_list=var_g2)
 
-D1_solver = tf.train.AdamOptimizer().minimize(D1_loss, var_list=var_d1)
-D2_solver = tf.train.AdamOptimizer().minimize(D2_loss, var_list=var_d2)
+D1_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(D1_loss, var_list=var_d1)
+D2_solver = tf.train.AdamOptimizer(2e-4, beta1=0.5).minimize(D2_loss, var_list=var_d2)
 
 Ss_solver = tf.train.AdamOptimizer().minimize(Ss_loss, var_list=var_s)
-Gs_solver = tf.train.AdamOptimizer().minimize(0.4*Gs_loss, var_list=var_g1 + var_g2)
-G2s_solver = tf.train.AdamOptimizer().minimize(0.4*Gs_loss, var_list=var_g2)
+Gs_solver = tf.train.AdamOptimizer().minimize(Gs_loss, var_list=var_g1 + var_g2)
 
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
@@ -407,7 +444,8 @@ def cifar_read(file):
 
 def cifar_data_extract(dict):
     imgs_raw = dict[b'data'].astype("uint8")
-    imgs = np.array(imgs_raw, dtype=float) / 255.0   
+    imgs = np.array(imgs_raw, dtype=float) / 255.0  
+    imgs = imgs*2 - 1.  
     imgs = imgs.reshape([-1, 3, 32, 32]).transpose([0, 2, 3, 1])
     labels = np.array(dict[b'labels'], dtype=int)
     #labels = labels_one_hot(dict[b'labels'], 10)
@@ -473,21 +511,14 @@ for it in range(200001):
 	sf_batch = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
 
 	#Training
-	if it < m1_stop:
-		_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
-	else:
-		loss_d1 = 0.
+	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
 	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch, x2_:x2_batch})
 	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
 
-	if it < m1_stop:
-		_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
-		_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
-	else:
-		loss_g1 = 0.
-		_, loss_gs = sess.run([G2s_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
+	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
+	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
 	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch})
-	loss_gs = 0.
+
 	#Show result
 	if it%100 == 0:
 		print("Iter: {}".format(it))

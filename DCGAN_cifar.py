@@ -8,7 +8,7 @@ import random
 import math
 
 def plot(samples):
-    samples = (samples + 1.)/2
+    samples = (samples + 1.)/2.
     fig = plt.figure(figsize=(4, 4))
     gs = gridspec.GridSpec(4, 4)
     gs.update(wspace=0.05, hspace=0.05)
@@ -164,7 +164,11 @@ b_d_conv4 = tf.Variable(tf.zeros(shape=[1024]))
 W_d_fc5 = tf.Variable(xavier_init([1024,1]))
 b_d_fc5 = tf.Variable(tf.zeros(shape=[1]))
 
-var_d = [W_d_conv1, b_d_conv1, W_d_conv2, b_d_conv2, W_d_conv3, b_d_conv3, W_d_conv4, b_d_conv4, W_d_fc5, b_d_fc5]
+var_d = [W_d_conv1, b_d_conv1, 
+         W_d_conv2, b_d_conv2, 
+         W_d_conv3, b_d_conv3, 
+         W_d_conv4, b_d_conv4, 
+         W_d_fc5, b_d_fc5]
 
 def Discriminator(x):
     h_d_conv1 = tf.nn.relu(conv2d(x, W_d_conv1, [1,2,2,1], bn=False) + b_d_conv1)

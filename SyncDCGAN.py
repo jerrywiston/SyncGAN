@@ -494,7 +494,7 @@ if not os.path.exists('out/'):
     os.makedirs('out/')
 
 i=0
-for it in range(40001):
+for it in range(20001):
 	#Get batch training data
 	x1_sync, x2_sync, s_sync = sync_match_next_batch(x1_train, x2_train, batch_size)
 	x1_nsync, x2_nsync, s_nsync = nsync_match_next_batch(x1_train, x2_train, batch_size)
