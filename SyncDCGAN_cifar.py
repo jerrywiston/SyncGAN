@@ -10,7 +10,8 @@ import scipy.ndimage.interpolation
 
 #==================== Draw Figure ====================
 def plot(samples, size, re_size=(32,32,3), gray=False):
-    samples = (samples + 1.)/2.
+    if gray==False:
+        samples = (samples + 1.)/2.
     fig = plt.figure(figsize=size)
     gs = gridspec.GridSpec(size[0], size[1])
     gs.update(wspace=0.05, hspace=0.05)
@@ -41,10 +42,8 @@ def plot_cifar(id, type, samp, size=(4,4)):
     plt.close(fig)
 
 def samp_fig(sess):
-	z1_batch = sample_z(16, z1_dim)
-	z2_batch = sample_z(16, z2_dim)
-	c_batch = sample_z(16, c_dim)
-	x1_samp, x2_samp = sess.run([G1_sample,G2_sample], feed_dict={z1_:z1_batch, z2_: z2_batch, c1_:c_batch, c2_: c_batch})
+	z_batch = sample_z(16, z_dim)
+	x1_samp, x2_samp = sess.run([G1_sample,G2_sample], feed_dict={z1_:z_batch, z2_: z_batch})
 	return x1_samp, x2_samp
 
 #==================== Data Batch ====================
@@ -145,9 +144,7 @@ def sample_z(m, n, type=1):
 
 #==================== Parameter ====================
 batch_size = 64
-z1_dim = 8
-z2_dim = 8
-c_dim = 56
+z_dim = 64
 
 def xavier_init(size):
     if len(size) == 4:
@@ -171,11 +168,8 @@ def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True):
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #==================== Placeholder ====================
-z1_ = tf.placeholder(tf.float32, shape=[None, z1_dim])
-z2_ = tf.placeholder(tf.float32, shape=[None, z2_dim])
-
-c1_ = tf.placeholder(tf.float32, shape=[None, c_dim])
-c2_ = tf.placeholder(tf.float32, shape=[None, c_dim])
+z1_ = tf.placeholder(tf.float32, shape=[None, z_dim])
+z2_ = tf.placeholder(tf.float32, shape=[None, z_dim])
 
 x1_ = tf.placeholder(tf.float32, shape=[None, 784])
 x2_ = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
@@ -184,7 +178,7 @@ s_ = tf.placeholder(tf.float32, shape=[None, 1])
 
 #==================== Generator ====================
 #Generator 1
-W_m1_g_fc1 = tf.Variable(xavier_init([z1_dim,7*7*128]))
+W_m1_g_fc1 = tf.Variable(xavier_init([z_dim,7*7*128]))
 b_m1_g_fc1 = tf.Variable(tf.zeros(shape=[7*7*128]))
 
 W_m1_g_conv2 = tf.Variable(xavier_init([5,5,64,128]))
@@ -212,13 +206,13 @@ def Generator1(z):
     h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
-    h_g_conv4 = tf.nn.tanh(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m1_g_conv4)
+    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m1_g_conv4)
 
     h_g_re4 = tf.reshape(h_g_conv4, [-1,784])
     return h_g_re4
 
 #Generator 2
-W_m2_g_fc1 = tf.Variable(xavier_init([z2_dim,2*2*1024]))
+W_m2_g_fc1 = tf.Variable(xavier_init([z_dim,2*2*1024]))
 b_m2_g_fc1 = tf.Variable(tf.zeros(shape=[2*2*1024]))
 
 W_m2_g_conv2 = tf.Variable(xavier_init([5,5,512,1024]))
@@ -480,8 +474,8 @@ x_cifar_p3, y_cifar_p3 = cifar_data_extract(dict3)
 x_cifar_p4, y_cifar_p4 = cifar_data_extract(dict4)
 x_cifar_p5, y_cifar_p5 = cifar_data_extract(dict5)
 
-x_cifar = np.concatenate((x_cifar_p1, x_cifar_p2), axis=0)
-y_cifar = np.concatenate((y_cifar_p1, y_cifar_p2), axis=0)
+x_cifar = np.concatenate((x_cifar_p1, x_cifar_p2, x_cifar_p3, x_cifar_p4, x_cifar_p5), axis=0)
+y_cifar = np.concatenate((y_cifar_p1, y_cifar_p2, y_cifar_p3, y_cifar_p4, y_cifar_p5), axis=0)
 x2_train = class_list(x_cifar, y_cifar, 10)
 
 #==================== Main ====================
@@ -499,25 +493,22 @@ for it in range(200001):
 	x2_batch = np.concatenate((x2_sync, x2_nsync), axis=0)
 	sr_batch = np.concatenate((s_sync, s_nsync), axis=0)
 
-	z1_batch = sample_z(batch_size*2, z1_dim)
-	z2_batch = sample_z(batch_size*2, z2_dim)
+	z_sync_batch = sample_z(batch_size, z_dim)
+	z1_nsync_batch = sample_z(batch_size, z_dim)
+	z2_nsync_batch = sample_z(batch_size, z_dim)
 
-	c_sync_batch = sample_z(batch_size, c_dim)
-	c1_nsync_batch = sample_z(batch_size, c_dim)
-	c2_nsync_batch = sample_z(batch_size, c_dim)
-
-	c1_batch = np.concatenate((c_sync_batch, c1_nsync_batch), axis=0)
-	c2_batch = np.concatenate((c_sync_batch, c2_nsync_batch), axis=0)
+	z1_batch = np.concatenate((z_sync_batch, z1_nsync_batch), axis=0)
+	z2_batch = np.concatenate((z_sync_batch, z2_nsync_batch), axis=0)
 	sf_batch = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
 
 	#Training
-	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch, x1_:x1_batch})
-	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch, x2_:x2_batch})
+	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, x1_:x1_batch})
+	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, x2_:x2_batch})
 	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
-
-	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, c1_:c1_batch})
-	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, c1_:c1_batch, c2_:c2_batch, s_:sf_batch})
-	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, c2_:c2_batch})
+	
+	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch})
+	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch})
+	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, s_:sf_batch})
 
 	#Show result
 	if it%100 == 0:
