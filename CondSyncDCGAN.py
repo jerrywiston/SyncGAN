@@ -387,7 +387,7 @@ for it in range(40001):
 	#Show result
 	if it%100 == 0:
 		print("Iter: {}".format(it))
-		#print("  G_loss : {:.4f}, D_loss : {:.4f}".format(loss_g, loss_d))	
+		print("  G_loss : {:.4f}, D_loss : {:.4f}".format(loss_g, loss_d))	
 		print("  Gs_loss: {:.4f}, Ss_loss: {:.4f}".format(loss_gs, loss_ss))
 		print()
 		

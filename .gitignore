@@ -2,3 +2,5 @@
 out/
 out_save/
 cifar-10-batches-py/
+img_align_celeba_crop_32/
+img_align_celeba_crop_sketch_32/
