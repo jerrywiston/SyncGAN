@@ -111,50 +111,61 @@ def xavier_init(size):
     stddev = math.sqrt(3.0 / (n_inputs + n_outputs))
     return tf.truncated_normal(size, stddev=stddev)
 
+def batch_normalization(x, is_training=True):
+    return tf.contrib.layers.batch_norm(
+            x,
+            decay=0.9,
+            updates_collections=None,
+            epsilon=1e-5,
+            scale=True,
+            is_training=is_training
+            )
+
 def conv2d(x, W, stride=[1,2,2,1], bn=True, is_training=True):
     if bn:
-        x = tf.layers.batch_normalization(x, training=is_training)
+        x = batch_normalization(x, is_training=is_training)
     return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
 
 def deconv2d(x, W, output_shape, stride = [1,2,2,1], bn=True, is_training=True):
     if bn:
-        x = tf.layers.batch_normalization(x, training=is_training)
+        x = batch_normalization(x, is_training=is_training)
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #============================== Generator ==============================
+g_filter_size = 32
 # 64 * 64
-W_G_conv1 = tf.Variable(xavier_init([3,3,1,32]))
-b_G_conv1 = tf.Variable(tf.zeros(shape=[32]))
+W_G_conv1 = tf.Variable(xavier_init([3,3,1,g_filter_size]))
+b_G_conv1 = tf.Variable(tf.zeros(shape=[g_filter_size]))
 # 64 * 64
-W_G_conv2 = tf.Variable(xavier_init([5,5,32,64]))
-b_G_conv2 = tf.Variable(tf.zeros(shape=[64]))
+W_G_conv2 = tf.Variable(xavier_init([5,5,g_filter_size,g_filter_size*2]))
+b_G_conv2 = tf.Variable(tf.zeros(shape=[g_filter_size*2]))
 # 32 * 32
-W_G_conv3 = tf.Variable(xavier_init([5,5,64,128]))
-b_G_conv3 = tf.Variable(tf.zeros(shape=[128]))
+W_G_conv3 = tf.Variable(xavier_init([5,5,g_filter_size*2,g_filter_size*4]))
+b_G_conv3 = tf.Variable(tf.zeros(shape=[g_filter_size*4]))
 # 16 * 16
-W_G_conv4 = tf.Variable(xavier_init([5,5,128,256]))
-b_G_conv4 = tf.Variable(tf.zeros(shape=[256]))
+W_G_conv4 = tf.Variable(xavier_init([5,5,g_filter_size*4,g_filter_size*8]))
+b_G_conv4 = tf.Variable(tf.zeros(shape=[g_filter_size*8]))
 # 8 * 8
-W_G_conv5 = tf.Variable(xavier_init([5,5,256,512]))
-b_G_conv5 = tf.Variable(tf.zeros(shape=[512]))
+W_G_conv5 = tf.Variable(xavier_init([5,5,g_filter_size*8,g_filter_size*16]))
+b_G_conv5 = tf.Variable(tf.zeros(shape=[g_filter_size*16]))
+
 # 4 * 4
+#W_G_fc1 = tf.Variable(xavier_init([4*4*g_filter_size*16, 4*4*g_filter_size*16]))
+#b_G_fc1 = tf.Variable(tf.zeros(shape=[4*4*g_filter_size*16]))
 
-# W_G_fc1 = tf.Variable(xavier_init([4*4*1024, 4*4*1024]))
-# b_G_fc1 = tf.Variable(tf.zeros(shape=[4*4*1024]))
-
-W_G_deconv1 = tf.Variable(xavier_init([5,5,256,512]))
-b_G_deconv1 = tf.Variable(tf.zeros(shape=[256]))
+W_G_deconv1 = tf.Variable(xavier_init([5,5,g_filter_size*8,g_filter_size*16]))
+b_G_deconv1 = tf.Variable(tf.zeros(shape=[g_filter_size*8]))
 # 8 * 8
-W_G_deconv2 = tf.Variable(xavier_init([5,5,128,256]))
-b_G_deconv2 = tf.Variable(tf.zeros(shape=[128]))
+W_G_deconv2 = tf.Variable(xavier_init([5,5,g_filter_size*4,g_filter_size*8]))
+b_G_deconv2 = tf.Variable(tf.zeros(shape=[g_filter_size*4]))
 # 16 * 16
-W_G_deconv3 = tf.Variable(xavier_init([5,5,64,128]))
-b_G_deconv3 = tf.Variable(tf.zeros(shape=[64]))
+W_G_deconv3 = tf.Variable(xavier_init([5,5,g_filter_size*2,g_filter_size*4]))
+b_G_deconv3 = tf.Variable(tf.zeros(shape=[g_filter_size*2]))
 # 32 * 32
-W_G_deconv4 = tf.Variable(xavier_init([5,5,32,64]))
-b_G_deconv4 = tf.Variable(tf.zeros(shape=[32]))
+W_G_deconv4 = tf.Variable(xavier_init([5,5,g_filter_size,g_filter_size*2]))
+b_G_deconv4 = tf.Variable(tf.zeros(shape=[g_filter_size]))
 # 64 * 64
-W_G_deconv5 = tf.Variable(xavier_init([3,3,3,32]))
+W_G_deconv5 = tf.Variable(xavier_init([3,3,3,g_filter_size]))
 b_G_deconv5 = tf.Variable(tf.zeros(shape=[3]))
 # 64 * 64
 
@@ -179,39 +190,40 @@ def generator(X, training):
     h_conv4 = tf.nn.relu(conv2d(h_conv3, W_G_conv4, is_training=training) + b_G_conv4)
     h_conv5 = tf.nn.relu(conv2d(h_conv4, W_G_conv5, is_training=training) + b_G_conv5)
 
-    # h_conv5_re = tf.reshape(h_conv5, [-1, 4*4*1024])
+    # h_conv5_re = tf.reshape(h_conv5, [-1, 4*4*g_filter_size*16])
     # h_conv5_re = tf.layers.batch_normalization(h_conv5_re, training=True)
     # h_fc1 = tf.nn.relu(tf.matmul(h_conv5_re, W_G_fc1) + b_G_fc1)
-    # h_fc1_re = tf.reshape(h_fc1, [-1, 4, 4, 1024])
+    # h_fc1_re = tf.reshape(h_fc1, [-1, 4, 4, g_filter_size*16])
 
-    output_shape = tf.stack([tf.shape(X)[0], 4, 4, 256])
+    output_shape = tf.stack([tf.shape(X)[0], 4, 4, g_filter_size*8])
     h_deconv1 = tf.nn.relu(deconv2d(h_conv5, W_G_deconv1, output_shape, is_training=training) + b_G_deconv1)
-    output_shape = tf.stack([tf.shape(X)[0], 8, 8, 128])
+    output_shape = tf.stack([tf.shape(X)[0], 8, 8, g_filter_size*4])
     h_deconv2 = tf.nn.relu(deconv2d(h_deconv1, W_G_deconv2, output_shape, is_training=training) + b_G_deconv2)
-    output_shape = tf.stack([tf.shape(X)[0], 16, 16, 64])
+    output_shape = tf.stack([tf.shape(X)[0], 16, 16, g_filter_size*2])
     h_deconv3 = tf.nn.relu(deconv2d(h_deconv2, W_G_deconv3, output_shape, is_training=training) + b_G_deconv3)
-    output_shape = tf.stack([tf.shape(X)[0], 32, 32, 32])
+    output_shape = tf.stack([tf.shape(X)[0], 32, 32, g_filter_size])
     h_deconv4 = deconv2d(h_deconv3, W_G_deconv4, output_shape, is_training=training) + b_G_deconv4
     output_shape = tf.stack([tf.shape(X)[0], 32, 32, 3])
     h_deconv5 = deconv2d(h_deconv4, W_G_deconv5, output_shape, stride = [1,1,1,1], is_training=training) + b_G_deconv5
 
-    return tf.nn.sigmoid(h_deconv5)
+    return tf.nn.tanh(h_deconv5)
 
 #============================== Discriminator ==============================
+d_filter_size = 32
 # 64 * 64
-W_D_conv1 = tf.Variable(xavier_init([5,5,3,64]))
-b_D_conv1 = tf.Variable(tf.zeros(shape=[64]))
+W_D_conv1 = tf.Variable(xavier_init([5,5,3,d_filter_size]))
+b_D_conv1 = tf.Variable(tf.zeros(shape=[d_filter_size]))
 # 32 * 32
-W_D_conv2 = tf.Variable(xavier_init([5,5,64,128]))
-b_D_conv2 = tf.Variable(tf.zeros(shape=[128]))
+W_D_conv2 = tf.Variable(xavier_init([5,5,d_filter_size,d_filter_size*2]))
+b_D_conv2 = tf.Variable(tf.zeros(shape=[d_filter_size*2]))
 # 16 * 16
-W_D_conv3 = tf.Variable(xavier_init([5,5,128,256]))
-b_D_conv3 = tf.Variable(tf.zeros(shape=[256]))
+W_D_conv3 = tf.Variable(xavier_init([5,5,d_filter_size*2,d_filter_size*4]))
+b_D_conv3 = tf.Variable(tf.zeros(shape=[d_filter_size*4]))
 # 8 * 8
-W_D_conv4 = tf.Variable(xavier_init([5,5,256,512]))
-b_D_conv4 = tf.Variable(tf.zeros(shape=[512]))
+W_D_conv4 = tf.Variable(xavier_init([5,5,d_filter_size*4,d_filter_size*8]))
+b_D_conv4 = tf.Variable(tf.zeros(shape=[d_filter_size*8]))
 # 4 * 4
-W_D_fc1 = tf.Variable(xavier_init([512,1]))
+W_D_fc1 = tf.Variable(xavier_init([d_filter_size*8,1]))
 b_D_fc1 = tf.Variable(tf.zeros(shape=[1]))
 
 var_D = [W_D_conv1, b_D_conv1,
@@ -233,45 +245,45 @@ def discriminator(X, training):
 
 #============================== Synchronizer ==============================
 # Mode 1
-filter_size = 64
+s_filter_size = 32
 # 64 * 64
-W_m1_conv1 = tf.Variable(xavier_init([5,5,1,filter_size]))
-b_m1_conv1 = tf.Variable(tf.zeros(shape=[filter_size]))
+W_m1_conv1 = tf.Variable(xavier_init([5,5,1,s_filter_size]))
+b_m1_conv1 = tf.Variable(tf.zeros(shape=[s_filter_size]))
 # 32 * 32
-W_m1_conv2 = tf.Variable(xavier_init([5,5,filter_size,filter_size*2]))
-b_m1_conv2 = tf.Variable(tf.zeros(shape=[filter_size*2]))
+W_m1_conv2 = tf.Variable(xavier_init([5,5,s_filter_size,s_filter_size*2]))
+b_m1_conv2 = tf.Variable(tf.zeros(shape=[s_filter_size*2]))
 # 16 * 16
-W_m1_conv3 = tf.Variable(xavier_init([5,5,filter_size*2,filter_size*4]))
-b_m1_conv3 = tf.Variable(tf.zeros(shape=[filter_size*4]))
+W_m1_conv3 = tf.Variable(xavier_init([5,5,s_filter_size*2,s_filter_size*4]))
+b_m1_conv3 = tf.Variable(tf.zeros(shape=[s_filter_size*4]))
 # 8 * 8
-W_m1_conv4 = tf.Variable(xavier_init([5,5,filter_size*4,filter_size*8]))
-b_m1_conv4 = tf.Variable(tf.zeros(shape=[filter_size*8]))
+W_m1_conv4 = tf.Variable(xavier_init([5,5,s_filter_size*4,s_filter_size*8]))
+b_m1_conv4 = tf.Variable(tf.zeros(shape=[s_filter_size*8]))
 # 4 * 4
-W_m1_fc1 = tf.Variable(xavier_init([2*2*filter_size*8,filter_size*8]))
-b_m1_fc1 = tf.Variable(tf.zeros(shape=[filter_size*8]))
+W_m1_fc1 = tf.Variable(xavier_init([2*2*s_filter_size*8,s_filter_size*8]))
+b_m1_fc1 = tf.Variable(tf.zeros(shape=[s_filter_size*8]))
 
 # Mode 2
 # 64 * 64
-W_m2_conv1 = tf.Variable(xavier_init([5,5,3,filter_size]))
-b_m2_conv1 = tf.Variable(tf.zeros(shape=[filter_size]))
+W_m2_conv1 = tf.Variable(xavier_init([5,5,3,s_filter_size]))
+b_m2_conv1 = tf.Variable(tf.zeros(shape=[s_filter_size]))
 # 32 * 32
-W_m2_conv2 = tf.Variable(xavier_init([5,5,filter_size,filter_size*2]))
-b_m2_conv2 = tf.Variable(tf.zeros(shape=[filter_size*2]))
+W_m2_conv2 = tf.Variable(xavier_init([5,5,s_filter_size,s_filter_size*2]))
+b_m2_conv2 = tf.Variable(tf.zeros(shape=[s_filter_size*2]))
 # 16 * 16
-W_m2_conv3 = tf.Variable(xavier_init([5,5,filter_size*2,filter_size*4]))
-b_m2_conv3 = tf.Variable(tf.zeros(shape=[filter_size*4]))
+W_m2_conv3 = tf.Variable(xavier_init([5,5,s_filter_size*2,s_filter_size*4]))
+b_m2_conv3 = tf.Variable(tf.zeros(shape=[s_filter_size*4]))
 # 8 * 8
-W_m2_conv4 = tf.Variable(xavier_init([5,5,filter_size*4,filter_size*8]))
-b_m2_conv4 = tf.Variable(tf.zeros(shape=[filter_size*8]))
+W_m2_conv4 = tf.Variable(xavier_init([5,5,s_filter_size*4,s_filter_size*8]))
+b_m2_conv4 = tf.Variable(tf.zeros(shape=[s_filter_size*8]))
 # 4 * 4
-W_m2_fc1 = tf.Variable(xavier_init([2*2*filter_size*8,filter_size*8]))
-b_m2_fc1 = tf.Variable(tf.zeros(shape=[filter_size*8]))
+W_m2_fc1 = tf.Variable(xavier_init([2*2*s_filter_size*8,s_filter_size*8]))
+b_m2_fc1 = tf.Variable(tf.zeros(shape=[s_filter_size*8]))
 
 # Shared
-W_S_fc1 = tf.Variable(xavier_init([filter_size*16,filter_size*4]))
-b_S_fc1 = tf.Variable(tf.zeros(shape=[filter_size*4]))
+W_S_fc1 = tf.Variable(xavier_init([s_filter_size*16,s_filter_size*4]))
+b_S_fc1 = tf.Variable(tf.zeros(shape=[s_filter_size*4]))
 
-W_S_fc2 = tf.Variable(xavier_init([filter_size*4, 1]))
+W_S_fc2 = tf.Variable(xavier_init([s_filter_size*4, 1]))
 b_S_fc2 = tf.Variable(tf.zeros(shape=[1]))
 
 var_S = [W_m1_conv1, b_m1_conv1,
@@ -296,7 +308,7 @@ def synchronizer(x1, x2, training):
     h_conv3 = tf.nn.relu(conv2d(h_conv2, W_m1_conv3, is_training=training) + b_m1_conv3)
     h_conv4 = tf.nn.relu(conv2d(h_conv3, W_m1_conv4, is_training=training) + b_m1_conv4)
 
-    h_conv4_re = tf.reshape(h_conv4, [-1, 2*2*filter_size*8])
+    h_conv4_re = tf.reshape(h_conv4, [-1, 2*2*s_filter_size*8])
     h_conv4_re = tf.layers.batch_normalization(h_conv4_re, training=True)
     h_x1 = tf.nn.relu(tf.matmul(h_conv4_re, W_m1_fc1) + b_m1_fc1)
 
@@ -306,7 +318,7 @@ def synchronizer(x1, x2, training):
     h_conv3 = tf.nn.relu(conv2d(h_conv2, W_m2_conv3, is_training=training) + b_m2_conv3)
     h_conv4 = tf.nn.relu(conv2d(h_conv3, W_m2_conv4, is_training=training) + b_m2_conv4)
 
-    h_conv4_re = tf.reshape(h_conv4, [-1, 2*2*filter_size*8])
+    h_conv4_re = tf.reshape(h_conv4, [-1, 2*2*s_filter_size*8])
     h_conv4_re = tf.layers.batch_normalization(h_conv4_re, training=True)
     h_x2 = tf.nn.relu(tf.matmul(h_conv4_re, W_m2_fc1) + b_m2_fc1)
 
@@ -335,11 +347,17 @@ S_real_prob, S_real_logit = synchronizer(x1_, x2_, training_)
 S_fake_prob, S_fake_logit = synchronizer(x1_, g_sample, training_)
 
 #============================== Loss & Solver ==============================
+'''
 #Vanilla GAN Loss
 D_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_real_logit, labels=tf.ones_like(D_real_logit)))
 D_loss_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake_logit, labels=tf.zeros_like(D_fake_logit)))
 D_loss = D_loss_real + D_loss_fake 
 G_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=D_fake_logit, labels=tf.ones_like(D_fake_logit)))
+'''
+#W-GAN Loss
+eps = 1e-8
+D_loss = -tf.reduce_mean(tf.log(D_real_prob + eps) + tf.log(1. - D_fake_prob + eps))
+G_loss = -tf.reduce_mean(tf.log(D_fake_prob + eps))
 
 #Synchronize Loss
 Ss_loss_real = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=S_real_logit, labels=s_))
