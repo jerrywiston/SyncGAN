@@ -41,8 +41,8 @@ def samp_fig(sess, size):
 
     for i in range(int(size[0]/2)):
         z_sync_batch = sample_z(size[1], z_dim)
-        x1_samp[i] = sess.run(G1_sample, feed_dict={z1_: z_sync_batch})
-        x2_samp[i] = sess.run(G2_sample, feed_dict={z2_: z_sync_batch})
+        x1_samp[i] = sess.run(G1_sample, feed_dict={z1_: z_sync_batch, training_: False})
+        x2_samp[i] = sess.run(G2_sample, feed_dict={z2_: z_sync_batch, training_: False})
 
     return x1_samp, x2_samp
 
@@ -119,14 +119,14 @@ def batch_normalization(x, is_training=True):
             is_training=is_training
     )
 
-def conv2d(x, W, stride, bn=True):
+def conv2d(x, W, stride, bn=True, is_training=True):
     if bn:
-        x = batch_normalization(x, is_training=True)
+        x = batch_normalization(x, is_training=is_training)
     return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
 
-def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True):
+def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True, is_training=True):
     if bn:
-        x = batch_normalization(x, is_training=True)
+        x = batch_normalization(x, is_training=is_training)
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #==================== Placeholder ====================
@@ -137,6 +137,7 @@ x1_ = tf.placeholder(tf.float32, shape=[None, 32, 32, 1])
 x2_ = tf.placeholder(tf.float32, shape=[None, 32, 32, 3])
 
 s_ = tf.placeholder(tf.float32, shape=[None, 1])
+training_ = tf.placeholder(tf.bool)
 
 #==================== Generator ====================
 #Generator 1
@@ -165,24 +166,24 @@ var_g1 = [W_m1_g_fc1, b_m1_g_fc1,
          W_m1_g_conv5, b_m1_g_conv5, 
          W_m1_g_conv6, b_m1_g_conv6]
 
-def Generator1(z):
+def Generator1(z, training):
     h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m1_g_fc1) + b_m1_g_fc1)
     h_g_re1 = tf.reshape(h_g_fc1, [-1, 2, 2, 1024])
 
     output_shape_g2 = tf.stack([tf.shape(z)[0], 4, 4, 512])
-    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2) + b_m1_g_conv2)
+    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2, is_training=training) + b_m1_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 8, 8, 256])
-    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3, is_training=training) + b_m1_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 16, 16, 128])
-    h_g_conv4 = tf.nn.relu(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4) + b_m1_g_conv4)
+    h_g_conv4 = tf.nn.relu(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, is_training=training) + b_m1_g_conv4)
 
     output_shape_g5 = tf.stack([tf.shape(z)[0], 32, 32, 64])
-    h_g_conv5 = tf.nn.relu(deconv2d(h_g_conv4, W_m1_g_conv5, output_shape_g5) + b_m1_g_conv5)
+    h_g_conv5 = tf.nn.relu(deconv2d(h_g_conv4, W_m1_g_conv5, output_shape_g5, is_training=training) + b_m1_g_conv5)
 
     output_shape_g6 = tf.stack([tf.shape(z)[0], 32, 32, 1])
-    h_g_conv6 = tf.nn.sigmoid(deconv2d(h_g_conv5, W_m1_g_conv6, output_shape_g6, stride=[1,1,1,1]) + b_m1_g_conv6)
+    h_g_conv6 = tf.nn.sigmoid(deconv2d(h_g_conv5, W_m1_g_conv6, output_shape_g6, stride=[1,1,1,1], is_training=training) + b_m1_g_conv6)
 
     return h_g_conv6
 
@@ -212,24 +213,24 @@ var_g2 = [W_m2_g_fc1, b_m2_g_fc1,
          W_m2_g_conv5, b_m2_g_conv5, 
          W_m2_g_conv6, b_m2_g_conv6]
 
-def Generator2(z):
+def Generator2(z, training):
     h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m2_g_fc1) + b_m2_g_fc1)
     h_g_re1 = tf.reshape(h_g_fc1, [-1, 2, 2, 1024])
 
     output_shape_g2 = tf.stack([tf.shape(z)[0], 4, 4, 512])
-    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
+    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2, is_training=training) + b_m2_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 8, 8, 256])
-    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3, is_training=training) + b_m2_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 16, 16, 128])
-    h_g_conv4 = tf.nn.relu(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4) + b_m2_g_conv4)
+    h_g_conv4 = tf.nn.relu(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, is_training=training) + b_m2_g_conv4)
 
     output_shape_g5 = tf.stack([tf.shape(z)[0], 32, 32, 64])
-    h_g_conv5 = tf.nn.relu(deconv2d(h_g_conv4, W_m2_g_conv5, output_shape_g5) + b_m2_g_conv5)
+    h_g_conv5 = tf.nn.relu(deconv2d(h_g_conv4, W_m2_g_conv5, output_shape_g5, is_training=training) + b_m2_g_conv5)
 
     output_shape_g6 = tf.stack([tf.shape(z)[0], 32, 32, 3])
-    h_g_conv6 = tf.nn.sigmoid(deconv2d(h_g_conv5, W_m2_g_conv6, output_shape_g6, stride=[1,1,1,1]) + b_m2_g_conv6)
+    h_g_conv6 = tf.nn.sigmoid(deconv2d(h_g_conv5, W_m2_g_conv6, output_shape_g6, stride=[1,1,1,1], is_training=training) + b_m2_g_conv6)
 
     return h_g_conv6
 
@@ -256,11 +257,11 @@ var_d1 = [W_m1_d_conv1, b_m1_d_conv1,
           W_m1_d_conv4, b_m1_d_conv4, 
           W_m1_d_fc5, b_m1_d_fc5]
 
-def Discriminator1(x):
-    h_d_conv1 = tf.nn.relu(conv2d(x, W_m1_d_conv1, [1,2,2,1], bn=False) + b_m1_d_conv1)
-    h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1]) + b_m1_d_conv2)
-    h_d_conv3 = tf.nn.relu(conv2d(h_d_conv2, W_m1_d_conv3, [1,2,2,1]) + b_m1_d_conv3)
-    h_d_conv4 = tf.nn.relu(conv2d(h_d_conv3, W_m1_d_conv4, [1,2,2,1]) + b_m1_d_conv4)
+def Discriminator1(x, training):
+    h_d_conv1 = tf.nn.relu(conv2d(x, W_m1_d_conv1, [1,2,2,1], bn=False, is_training=training) + b_m1_d_conv1)
+    h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1], is_training=training) + b_m1_d_conv2)
+    h_d_conv3 = tf.nn.relu(conv2d(h_d_conv2, W_m1_d_conv3, [1,2,2,1], is_training=training) + b_m1_d_conv3)
+    h_d_conv4 = tf.nn.relu(conv2d(h_d_conv3, W_m1_d_conv4, [1,2,2,1], is_training=training) + b_m1_d_conv4)
 
     avg_pool = tf.reduce_mean(h_d_conv4, [1, 2])
 
@@ -291,11 +292,11 @@ var_d2 = [W_m2_d_conv1, b_m2_d_conv1,
           W_m2_d_conv4, b_m2_d_conv4, 
           W_m2_d_fc5, b_m2_d_fc5]
 
-def Discriminator2(x):
-    h_d_conv1 = tf.nn.relu(conv2d(x, W_m2_d_conv1, [1,2,2,1], bn=False) + b_m2_d_conv1)
-    h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1]) + b_m2_d_conv2)
-    h_d_conv3 = tf.nn.relu(conv2d(h_d_conv2, W_m2_d_conv3, [1,2,2,1]) + b_m2_d_conv3)
-    h_d_conv4 = tf.nn.relu(conv2d(h_d_conv3, W_m2_d_conv4, [1,2,2,1]) + b_m2_d_conv4)
+def Discriminator2(x, training):
+    h_d_conv1 = tf.nn.relu(conv2d(x, W_m2_d_conv1, [1,2,2,1], bn=False, is_training=training) + b_m2_d_conv1)
+    h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1], is_training=training) + b_m2_d_conv2)
+    h_d_conv3 = tf.nn.relu(conv2d(h_d_conv2, W_m2_d_conv3, [1,2,2,1], is_training=training) + b_m2_d_conv3)
+    h_d_conv4 = tf.nn.relu(conv2d(h_d_conv3, W_m2_d_conv4, [1,2,2,1], is_training=training) + b_m2_d_conv4)
 
     avg_pool = tf.reduce_mean(h_d_conv4, [1, 2])
 
@@ -338,15 +339,15 @@ var_s = [ W_m1_s_conv1, b_m1_s_conv1,
 		  W_s_s4, b_s_s4,
 		  W_s_s5, b_s_s5 ]
 
-def Synchronizer(x1, x2):
+def Synchronizer(x1, x2, training):
 	#Mode 1
-	h_conv1 = tf.nn.relu(conv2d(x1, W_m1_s_conv1, [1,2,2,1], bn=False) + b_m1_s_conv1)
+	h_conv1 = tf.nn.relu(conv2d(x1, W_m1_s_conv1, [1,2,2,1], bn=False, is_training=training) + b_m1_s_conv1)
 	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m1_s_conv2, [1,2,2,1]) + b_m1_s_conv2)
 	h_re2 = tf.reshape(h_conv2, [-1,8*8*32])
 	v1 = tf.nn.relu(tf.matmul(h_re2, W_m1_s_fc3) + b_m1_s_fc3)
 
 	#Modal 2
-	h_m2_s_conv1 = tf.nn.relu(conv2d(x2, W_m2_s_conv1, [1,2,2,1], bn=False) + b_m2_s_conv1)
+	h_m2_s_conv1 = tf.nn.relu(conv2d(x2, W_m2_s_conv1, [1,2,2,1], bn=False, is_training=training) + b_m2_s_conv1)
 	h_m2_s_conv2 = tf.nn.relu(conv2d(h_m2_s_conv1, W_m2_s_conv2, [1,2,2,1]) + b_m2_s_conv2)
 	h_m2_s_re2 = tf.reshape(h_m2_s_conv2, [-1,8*8*32])
 	v2 = tf.nn.relu(tf.matmul(h_m2_s_re2, W_m2_s_fc3) + b_m2_s_fc3)
@@ -358,17 +359,17 @@ def Synchronizer(x1, x2):
 	s_prob = tf.nn.sigmoid(s_logit)
 	return s_prob, s_logit
 
-G1_sample = Generator1(z1_)
-G2_sample = Generator2(z2_)
+G1_sample = Generator1(z1_, training_)
+G2_sample = Generator2(z2_, training_)
 
-D1_real_prob, D1_real_logit = Discriminator1(x1_)
-D1_fake_prob, D1_fake_logit = Discriminator1(G1_sample)
+D1_real_prob, D1_real_logit = Discriminator1(x1_, training_)
+D1_fake_prob, D1_fake_logit = Discriminator1(G1_sample, training_)
 
-D2_real_prob, D2_real_logit = Discriminator2(x2_)
-D2_fake_prob, D2_fake_logit = Discriminator2(G2_sample)
+D2_real_prob, D2_real_logit = Discriminator2(x2_, training_)
+D2_fake_prob, D2_fake_logit = Discriminator2(G2_sample, training_)
 
-S_real_prob, S_real_logit = Synchronizer(x1_, x2_)
-S_fake_prob, S_fake_logit = Synchronizer(G1_sample, G2_sample)
+S_real_prob, S_real_logit = Synchronizer(x1_, x2_, training_)
+S_fake_prob, S_fake_logit = Synchronizer(G1_sample, G2_sample, training_)
 
 #==================== Loss & Train ====================
 #Vanilla GAN Loss
@@ -429,13 +430,13 @@ for it in range(200001):
 	sf_batch = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
 
 	#Training
-	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, x1_:x1_batch})
-	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, x2_:x2_batch})
-	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
+	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, x1_:x1_batch, training_: True})
+	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, x2_:x2_batch, training_: True})
+	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch, training_: True})
 	
-	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch})
-	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch})
-	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, s_:sf_batch})
+	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, training_: True})
+	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, training_: True})
+	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, s_:sf_batch, training_: True})
 
 	#Show result
 	if it%100 == 0:

@@ -35,8 +35,8 @@ def samp_fig(sess, size):
 	for i in range(int(size[0]/2)):
 		z_batch = sample_z(size[1], z_dim)
 		
-		x_samp[i*2] = sess.run(G1_sample, feed_dict={z1_: z_batch})
-		x_samp[i*2+1] = sess.run(G2_sample, feed_dict={z2_: z_batch})
+		x_samp[i*2] = sess.run(G1_sample, feed_dict={z1_: z_batch, training_: False})
+		x_samp[i*2+1] = sess.run(G2_sample, feed_dict={z2_: z_batch, training_: False})
 
 	x_samp = x_samp.reshape(size[0]*size[1], 784)
 	return x_samp
@@ -149,8 +149,8 @@ def CompareFig(sess, x1_train, x2_train, z_dim):
 
 	#Random sample
 	z_samp = sample_z(8, z_dim)
-	x_fig[0:8] = sess.run(G1_sample, feed_dict={z1_: z_samp})
-	x_fig[8:16] = sess.run(G2_sample, feed_dict={z2_: z_samp})
+	x_fig[0:8] = sess.run(G1_sample, feed_dict={z1_: z_samp, training_: False})
+	x_fig[8:16] = sess.run(G2_sample, feed_dict={z2_: z_samp, training_: False})
 
 	#Encode Latent
 	x1_sync, x2_sync, _ = sync_match_next_batch(x1_train, x2_train, 8, cut=200)
@@ -158,10 +158,10 @@ def CompareFig(sess, x1_train, x2_train, z_dim):
 	z2_re = LatentEncode(sess, x2_sync, Info_grad2)
 
 	#Reconstruct
-	x1_re = sess.run(G1_sample, feed_dict={z1_:z1_re})
-	x21_re = sess.run(G1_sample, feed_dict={z1_:z2_re})
-	x2_re = sess.run(G2_sample, feed_dict={z2_:z2_re})
-	x12_re = sess.run(G2_sample, feed_dict={z2_:z1_re})
+	x1_re = sess.run(G1_sample, feed_dict={z1_:z1_re, training_: False})
+	x21_re = sess.run(G1_sample, feed_dict={z1_:z2_re, training_: False})
+	x2_re = sess.run(G2_sample, feed_dict={z2_:z2_re, training_: False})
+	x12_re = sess.run(G2_sample, feed_dict={z2_:z1_re, training_: False})
 
 	#Fill data
 	x_fig[16:24] = x1_sync
@@ -188,14 +188,24 @@ def xavier_init(size):
     stddev = math.sqrt(3.0 / (n_inputs + n_outputs))
     return tf.truncated_normal(size, stddev=stddev)
 
-def conv2d(x, W, stride, bn=True):
+def batch_normalization(x, is_training):
+    return tf.contrib.layers.batch_norm(
+            x,
+            decay=0.9,
+            updates_collections=None,
+            epsilon=1e-5,
+            scale=True,
+            is_training=is_training
+    )
+
+def conv2d(x, W, stride, bn=True, is_training=False):
     if bn:
-        x = tf.layers.batch_normalization(x, training=True)
+        x = batch_normalization(x, is_training=is_training)
     return tf.nn.conv2d(x ,W ,strides=stride, padding='SAME')
 
-def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True):
+def deconv2d(x, W, output_shape, stride=[1,2,2,1], bn=True, is_training=False):
     if bn:
-        x = tf.layers.batch_normalization(x, training=True)
+        x = batch_normalization(x, is_training=is_training)
     return tf.nn.conv2d_transpose(x, W, output_shape, strides=stride, padding='SAME')
 
 #==================== Placeholder ====================
@@ -206,6 +216,7 @@ x1_ = tf.placeholder(tf.float32, shape=[None, 784])
 x2_ = tf.placeholder(tf.float32, shape=[None, 784])
 
 s_ = tf.placeholder(tf.float32, shape=[None, 1])
+training_ = tf.placeholder(tf.bool)
 
 #==================== Generator ====================
 #Generator 1
@@ -226,18 +237,18 @@ var_g1 = [W_m1_g_fc1, b_m1_g_fc1,
 		  W_m1_g_conv3, b_m1_g_conv3, 
 		  W_m1_g_conv4, b_m1_g_conv4]
 
-def Generator1(z):
+def Generator1(z, training):
     h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m1_g_fc1) + b_m1_g_fc1)
     h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 128])
 
     output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 64])
-    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2) + b_m1_g_conv2)
+    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m1_g_conv2, output_shape_g2, is_training=training) + b_m1_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
-    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3) + b_m1_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m1_g_conv3, output_shape_g3, is_training=training) + b_m1_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
-    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m1_g_conv4)
+    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m1_g_conv4, output_shape_g4, stride=[1,1,1,1], is_training=training) + b_m1_g_conv4)
 
     h_g_re4 = tf.reshape(h_g_conv4, [-1,784])
     return h_g_re4
@@ -260,18 +271,18 @@ var_g2 = [W_m2_g_fc1, b_m2_g_fc1,
 		  W_m2_g_conv3, b_m2_g_conv3,
 		  W_m2_g_conv4, b_m2_g_conv4]
 
-def Generator2(z):
+def Generator2(z, training):
     h_g_fc1 = tf.nn.relu(tf.matmul(z, W_m2_g_fc1) + b_m2_g_fc1)
     h_g_re1 = tf.reshape(h_g_fc1, [-1, 7, 7, 128])
 
     output_shape_g2 = tf.stack([tf.shape(z)[0], 14, 14, 64])
-    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2) + b_m2_g_conv2)
+    h_g_conv2 = tf.nn.relu(deconv2d(h_g_re1, W_m2_g_conv2, output_shape_g2, is_training=training) + b_m2_g_conv2)
 
     output_shape_g3 = tf.stack([tf.shape(z)[0], 28, 28, 32])
-    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3) + b_m2_g_conv3)
+    h_g_conv3 = tf.nn.relu(deconv2d(h_g_conv2, W_m2_g_conv3, output_shape_g3, is_training=training) + b_m2_g_conv3)
 
     output_shape_g4 = tf.stack([tf.shape(z)[0], 28, 28, 1])
-    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, stride=[1,1,1,1]) + b_m2_g_conv4)
+    h_g_conv4 = tf.nn.sigmoid(deconv2d(h_g_conv3, W_m2_g_conv4, output_shape_g4, stride=[1,1,1,1], is_training=training) + b_m2_g_conv4)
 
     h_g_re4 = tf.reshape(h_g_conv4, [-1,784])
     return h_g_re4
@@ -295,11 +306,11 @@ var_d1 = [W_m1_d_conv1, b_m1_d_conv1,
 		  W_m1_d_fc3, b_m1_d_fc3, 
 		  W_m1_d_fc4, b_m1_d_fc4]
 
-def Discriminator1(x):
+def Discriminator1(x, training):
 	x_re = tf.reshape(x, [-1,28,28,1])
-	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1], bn=False) + b_m1_d_conv1)
+	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m1_d_conv1, [1,2,2,1], bn=False, is_training=training) + b_m1_d_conv1)
 
-	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1]) + b_m1_d_conv2)
+	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m1_d_conv2, [1,2,2,1], is_training=training) + b_m1_d_conv2)
 	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m1_d_fc3) + b_m1_d_fc3)
@@ -327,11 +338,11 @@ var_d2 = [W_m2_d_conv1, b_m2_d_conv1,
 		  W_m2_d_fc3, b_m2_d_fc3, 
 		  W_m2_d_fc4, b_m2_d_fc4]
 
-def Discriminator2(x):
+def Discriminator2(x, training):
 	x_re = tf.reshape(x, [-1,28,28,1])
-	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m2_d_conv1, [1,2,2,1], bn=False) + b_m2_d_conv1)
+	h_d_conv1 = tf.nn.relu(conv2d(x_re, W_m2_d_conv1, [1,2,2,1], bn=False, is_training=training) + b_m2_d_conv1)
 
-	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1]) + b_m2_d_conv2)
+	h_d_conv2 = tf.nn.relu(conv2d(h_d_conv1, W_m2_d_conv2, [1,2,2,1], is_training=training) + b_m2_d_conv2)
 	h_d_re2 = tf.reshape(h_d_conv2, [-1,7*7*16])
 
 	h_d_fc3 = tf.nn.relu(tf.matmul(h_d_re2, W_m2_d_fc3) + b_m2_d_fc3)
@@ -375,18 +386,18 @@ var_s = [ W_m1_s_conv1, b_m1_s_conv1,
 		  W_s_s4, b_s_s4,
 		  W_s_s5, b_s_s5 ]
 
-def Synchronizer(x1, x2):
+def Synchronizer(x1, x2, training):
 	#Mode 1
 	x1_re = tf.reshape(x1, [-1,28,28,1])
-	h_conv1 = tf.nn.relu(conv2d(x1_re, W_m1_s_conv1, [1,2,2,1], bn=False) + b_m1_s_conv1)
-	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m1_s_conv2, [1,2,2,1]) + b_m1_s_conv2)
+	h_conv1 = tf.nn.relu(conv2d(x1_re, W_m1_s_conv1, [1,2,2,1], bn=False, is_training=training) + b_m1_s_conv1)
+	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m1_s_conv2, [1,2,2,1], is_training=training) + b_m1_s_conv2)
 	h_re2 = tf.reshape(h_conv2, [-1,7*7*32])
 	v1 = tf.nn.relu(tf.matmul(h_re2, W_m1_s_fc3) + b_m1_s_fc3)
 
 	#Mode 2
 	x2_re = tf.reshape(x2, [-1,28,28,1])
-	h_conv1 = tf.nn.relu(conv2d(x2_re, W_m2_s_conv1, [1,2,2,1], bn=False) + b_m2_s_conv1)
-	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m2_s_conv2, [1,2,2,1]) + b_m2_s_conv2)
+	h_conv1 = tf.nn.relu(conv2d(x2_re, W_m2_s_conv1, [1,2,2,1], bn=False, is_training=training) + b_m2_s_conv1)
+	h_conv2 = tf.nn.relu(conv2d(h_conv1, W_m2_s_conv2, [1,2,2,1], is_training=training) + b_m2_s_conv2)
 	h_re2 = tf.reshape(h_conv2, [-1,7*7*32])
 	v2 = tf.nn.relu(tf.matmul(h_re2, W_m2_s_fc3) + b_m2_s_fc3)
 
@@ -398,17 +409,17 @@ def Synchronizer(x1, x2):
 	return s_prob, s_logit
 
 #==================== Node Connect ====================
-G1_sample = Generator1(z1_)
-G2_sample = Generator2(z2_)
+G1_sample = Generator1(z1_, training_)
+G2_sample = Generator2(z2_, training_)
 
-D1_real_prob, D1_real_logit = Discriminator1(x1_)
-D1_fake_prob, D1_fake_logit = Discriminator1(G1_sample)
+D1_real_prob, D1_real_logit = Discriminator1(x1_, training_)
+D1_fake_prob, D1_fake_logit = Discriminator1(G1_sample, training_)
 
-D2_real_prob, D2_real_logit = Discriminator2(x2_)
-D2_fake_prob, D2_fake_logit = Discriminator2(G2_sample)
+D2_real_prob, D2_real_logit = Discriminator2(x2_, training_)
+D2_fake_prob, D2_fake_logit = Discriminator2(G2_sample, training_)
 
-S_real_prob, S_real_logit = Synchronizer(x1_, x2_)
-S_fake_prob, S_fake_logit = Synchronizer(G1_sample, G2_sample)
+S_real_prob, S_real_logit = Synchronizer(x1_, x2_, training_)
+S_fake_prob, S_fake_logit = Synchronizer(G1_sample, G2_sample, training_)
 
 #==================== Loss & Train ====================
 #Vanilla GAN Loss
@@ -460,7 +471,7 @@ Info_grad2 = {'Z':z2_, 'X':x2_, 'Zgrad':Z2_grad, 'Zdim':z_dim}
 def LatentEncode(sess, x, Info, rate=0.1, iter=1500):
     z = sample_z(x.shape[0], Info["Zdim"])
     for i in range(iter):
-        z_grad = sess.run(Info["Zgrad"], feed_dict={Info["Z"]:z, Info["X"]:x})
+        z_grad = sess.run(Info["Zgrad"], feed_dict={Info["Z"]:z, Info["X"]:x, training_: False})
         z_grad_np = np.asarray(z_grad[0])
         z -= rate * z_grad_np
 
@@ -512,19 +523,19 @@ for it in range(20001):
 	sf_batch = np.concatenate((np.ones((batch_size, 1)), np.zeros((batch_size, 1))), axis=0)
 	
 	#Training
-	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, x1_:x1_batch})
-	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, x2_:x2_batch})
-	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch})
+	_, loss_d1 = sess.run([D1_solver, D1_loss], feed_dict={z1_:z1_batch, x1_:x1_batch, training_: True})
+	_, loss_d2 = sess.run([D2_solver, D2_loss], feed_dict={z2_:z2_batch, x2_:x2_batch, training_: True})
+	_, loss_ss = sess.run([Ss_solver, Ss_loss], feed_dict={x1_:x1_batch, x2_:x2_batch, s_:sr_batch, training_: True})
 	
-	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch})
-	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch})
-	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, s_:sf_batch})
+	_, loss_g1 = sess.run([G1_solver, G1_loss], feed_dict={z1_:z1_batch, training_: True})
+	_, loss_g2 = sess.run([G2_solver, G2_loss], feed_dict={z2_:z2_batch, training_: True})
+	_, loss_gs = sess.run([Gs_solver, Gs_loss], feed_dict={z1_:z1_batch, z2_:z2_batch, s_:sf_batch, training_: True})
 		
 	#Show result
 	if it%100 == 0:
 		print("Iter: {}".format(it))
-		print("  G1_loss: {:.4f}, G2_loss: {:.4f}".format(loss_g1, loss_g2))	
-		print("  D1_loss: {:.4f}, D2_loss: {:.4f}".format(loss_d1, loss_d2))
+		print("  G1_loss: {:.4f}, D1_loss: {:.4f}".format(loss_g1, loss_d1))	
+		print("  G2_loss: {:.4f}, D2_loss: {:.4f}".format(loss_g2, loss_d2))
 		print("  Ss_loss: {:.4f}, Gs_loss: {:.4f}".format(loss_ss, loss_gs))
 		print()
 		
